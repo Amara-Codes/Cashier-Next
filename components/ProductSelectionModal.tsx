@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"; // Assuming this is your shadcn
 // Types (can be moved to a shared types file later)
 interface Product {
   id: number;
+  documentId?: string; // Optional for consistency with OrderRow
   name: string;
   price: number;
   description?: string;
@@ -15,14 +16,16 @@ interface Product {
 
 interface Category {
   id: number;
+  documentId?: string; // Optional for consistency with OrderRow
   name: string;
   products?: Product[];
 }
 
 interface CreatedOrder {
-    id: number;
-   customerName: string;
-  tableName: string;
+  id?: number;
+  documentId?: string;
+  customerName?: string;
+  tableName?: string;
   orderStatus?: string;
 }
 
@@ -31,8 +34,8 @@ interface ProductSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
   categories: Category[];
-  createdOrder?: CreatedOrder 
-  onProductAddToOrder: (product: Product, quantity: number, orderId: number) => void;
+  createdOrder?: CreatedOrder | null; // Optional to handle cases where no order is created yet
+  onProductAddToOrder: (product: Product, quantity: number, orderDocId: string, categoryDocId: string) => void;
 }
 
 export default function ProductSelectionModal({
@@ -42,7 +45,7 @@ export default function ProductSelectionModal({
   createdOrder,
   onProductAddToOrder,
 }: ProductSelectionModalProps) {
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [selectedCategoryDocId, setSelectedCategoryDocId] = useState<string | null>(null);
   const [categoryProducts, setCategoryProducts] = useState<Product[]>([]);
   const [selectedProductInModal, setSelectedProductInModal] = useState<Product | null>(null);
   const [selectedQuantity, setSelectedQuantity] = useState<number>(1);
@@ -50,16 +53,19 @@ export default function ProductSelectionModal({
   useEffect(() => {
     // Reset state when modal opens or categories change
     if (isOpen) {
-      setSelectedCategoryId(null);
+      setSelectedCategoryDocId(null);
       setCategoryProducts([]);
       setSelectedProductInModal(null);
       setSelectedQuantity(1);
     }
   }, [isOpen, categories]);
 
-  const handleCategoryClick = (categoryId: number) => {
-    setSelectedCategoryId(categoryId);
-    const selectedCategory = categories.find(cat => cat.id === categoryId);
+  const handleCategoryClick = (categoryDocId: string) => {
+    console.log("Category clicked:", categoryDocId);
+    setSelectedCategoryDocId(categoryDocId);
+    console.log("Selected category document ID:", categoryDocId);
+    const selectedCategory = categories.find(cat => cat.documentId === categoryDocId);
+    console.log("Selected category:", selectedCategory);
     const productsFromCategory = selectedCategory?.products || [];
     setCategoryProducts(productsFromCategory);
     setSelectedProductInModal(null); // Reset selected product when category changes
@@ -72,11 +78,11 @@ export default function ProductSelectionModal({
   };
 
   const handleConfirmAddProduct = () => {
-    if (!selectedProductInModal || selectedQuantity < 1 || createdOrder?.id === null) {
+    if (!selectedProductInModal || selectedQuantity < 1 || createdOrder?.documentId === null) {
       alert("Please select a product, ensure quantity is valid, and an order is active.");
       return;
     }
-    onProductAddToOrder(selectedProductInModal, selectedQuantity, createdOrder?.id || 0);
+    onProductAddToOrder(selectedProductInModal, selectedQuantity, createdOrder?.documentId || "", selectedCategoryDocId || "");
     // Optionally, reset selection after adding or keep modal open for more items
     // setSelectedProductInModal(null);
     // setSelectedQuantity(1);
@@ -106,9 +112,9 @@ export default function ProductSelectionModal({
                 {categories.map((category) => (
                   <li key={category.id}>
                     <Button
-                      variant={selectedCategoryId === category.id ? "secondary" : "ghost"}
+                      variant={selectedCategoryDocId === category.documentId ? "secondary" : "ghost"}
                       className="w-full justify-start text-left"
-                      onClick={() => handleCategoryClick(category.id)}
+                      onClick={() => handleCategoryClick(category.documentId || '')} // Ensure documentId is a string
                     >
                       {category.name ?? 'Unnamed Category'}
                     </Button>
@@ -123,24 +129,24 @@ export default function ProductSelectionModal({
           {/* Right Column: Products */}
           <div className="w-2/3 flex flex-col overflow-y-auto pl-4">
             <h3 className="text-lg font-medium mb-3 text-muted-foreground">
-              Products {selectedCategoryId && categories.find(c=>c.id === selectedCategoryId)?.name ? `in ${categories.find(c=>c.id === selectedCategoryId)?.name ?? 'Selected Category'}` : ''}
+              Products {selectedCategoryDocId && categories.find(c => c.documentId === selectedCategoryDocId)?.name ? `in ${categories.find(c => c.documentId === selectedCategoryDocId)?.name ?? 'Selected Category'}` : ''}
             </h3>
-            {selectedCategoryId ? (
+            {selectedCategoryDocId ? (
               categoryProducts.length > 0 ? (
                 <ul className="space-y-2 flex-1 overflow-y-auto">
                   {categoryProducts.map((product) => (
                     <li key={product.id}>
                       <Button
-                        variant={selectedProductInModal?.id === product.id ? "outline" : "ghost"}
+                        variant={selectedProductInModal?.documentId === product.documentId ? "outline" : "ghost"}
                         className="w-full justify-between text-left p-3 h-auto"
                         onClick={() => handleProductSelect(product)}
                       >
                         <div>
-                            <span className="font-medium">{product.name ?? 'Unnamed Product'}</span>
-                            {product.description && <p className="text-xs text-muted-foreground">{product.description}</p>}
+                          <span className="font-medium">{product.name ?? 'Unnamed Product'}</span>
+                          {product.description && <p className="text-xs text-muted-foreground">{product.description}</p>}
                         </div>
                         <span className="text-sm font-semibold">
-                            {product.price != undefined ? `€${product.price.toFixed(2)}` : 'Price N/A'}
+                          {product.price != undefined ? `€${product.price.toFixed(2)}` : 'Price N/A'}
                         </span>
                       </Button>
                     </li>
@@ -159,8 +165,8 @@ export default function ProductSelectionModal({
         {selectedProductInModal?.name && ( // Check for product name (implies product is selected)
           <div className="mt-6 pt-4 border-t border-border flex items-center justify-between space-x-4">
             <div className='flex items-center space-x-2'>
-                <label htmlFor="quantity" className="text-sm font-medium text-muted-foreground">Quantity:</label>
-                <input
+              <label htmlFor="quantity" className="text-sm font-medium text-muted-foreground">Quantity:</label>
+              <input
                 type="number"
                 id="quantity"
                 name="quantity"
@@ -168,7 +174,7 @@ export default function ProductSelectionModal({
                 value={selectedQuantity}
                 onChange={(e) => setSelectedQuantity(Math.max(1, parseInt(e.target.value) || 1))}
                 className="w-20 p-2 border border-input rounded-md text-sm bg-transparent focus:ring-primary focus:border-primary"
-                />
+              />
             </div>
             <Button onClick={handleConfirmAddProduct} size="lg">
               Add {selectedQuantity} x {selectedProductInModal.name} to Order

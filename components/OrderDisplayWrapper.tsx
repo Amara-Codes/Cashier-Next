@@ -5,12 +5,17 @@ import React, { useState, useEffect } from 'react';
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from 'next/navigation';
-import ProductSelectionModal from '@/components/ProductSelectionModal'; // Adjust path as necessary
+import ProductSelectionModal from '@/components/ProductSelectionModal';
+import OrderRowDisplay from '@/components/OrderRowDisplay'; // Adjust path as necessary
 import { Button } from "@/components/ui/button";
+import { data } from 'autoprefixer';
 
+
+type OrderRowStatus = 'pending' | 'served' | 'paid' | 'cancelled';
 // Re-use or import existing interfaces (ensure they are consistent)
 interface ProductInfo { // From ProductSelectionModal's Product type / page.tsx ProductInfo
     id: number;
+    documentId?: string;
     name: string;
     price: number;
     description?: string;
@@ -19,31 +24,40 @@ interface ProductInfo { // From ProductSelectionModal's Product type / page.tsx 
 
 interface OrderRow { // From page.tsx
     id: number;
+    documentId: string; // Added for clarity
     quantity: number;
     subtotal: number;
-    taxes: number;
+    taxesSubtotal: number;
+    category_doc_id?: string; // Optional for consistency with OrderRow
+    product_doc_id?: string; // Changed to productId for clarity
+    order_doc_id?: string;
     product?: ProductInfo;
     createdAt: string;
+    orderRowStatus?: OrderRowStatus; // Added for clarity
 }
 
-interface CustomerInfo { // From page.tsx
-    id: number;
-    name: string;
-    email?: string;
-}
+// REMOVED CustomerInfo interface as requested
+// interface CustomerInfo {
+//     id: number;
+//     documentId?: string;
+//     name: string;
+//     email?: string;
+// }
 
 interface Order { // From page.tsx
     id: number;
+    documentId?: string; // Added for clarity
     orderStatus?: string;
     tableName?: string;
-    customerName?: string;
-    customer?: CustomerInfo;
+    customerName?: string; // Keep customerName if it's a direct attribute on Order
+    // REMOVED customer?: CustomerInfo;
     createdAt: string;
     order_rows: OrderRow[];
 }
 
 interface Category { // From ProductSelectionModal / page.tsx
     id: number;
+    documentId?: string;
     name: string;
     products?: ProductInfo[];
 }
@@ -51,7 +65,8 @@ interface Category { // From ProductSelectionModal / page.tsx
 // For the modal's createdOrder prop
 interface CreatedOrderInfo {
     id: number;
-    customerName: string;
+    documentId?: string;
+    customerName: string; // Still needed for the modal's prop
     tableName: string;
     orderStatus?: string;
 }
@@ -71,42 +86,111 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
         setOrder(initialOrder);
     }, [initialOrder]); // Update state if props change (e.g., after router.refresh)
 
+    // NEW useEffect for managing order status based on order_rows
+    useEffect(() => {
+        // Only proceed if there are order rows
+        if (order.order_rows && order.order_rows.length > 0) {
+            const hasPendingRows = order.order_rows.some(
+                (row) => row.orderRowStatus === 'pending'
+            );
+            // Consider only non-cancelled rows for overall status check
+            const nonCancelledRows = order.order_rows.filter(row => row.orderRowStatus !== 'cancelled');
+
+            const allNonCancelledRowsServed = nonCancelledRows.every(
+                (row) => row.orderRowStatus === 'served'
+            );
+            const allNonCancelledRowsPaid = nonCancelledRows.every(
+                (row) => row.orderRowStatus === 'paid'
+            );
+
+            console.log("Checking order rows for status changes:", order.order_rows);
+
+            if (hasPendingRows && order.orderStatus !== 'pending') {
+                console.log("Found pending order rows. Attempting to update parent order status to 'pending'.");
+                updateOrderStatus('pending');
+            } else if (allNonCancelledRowsServed && order.orderStatus !== 'served' && order.orderStatus !== 'paid' && nonCancelledRows.length > 0) {
+                // Only update to 'served' if not already 'served' or 'paid' and there are actual non-cancelled items
+                console.log("All non-cancelled order rows are served. Attempting to update parent order status to 'served'.");
+                updateOrderStatus('served');
+            } else if (allNonCancelledRowsPaid && order.orderStatus !== 'paid' && nonCancelledRows.length > 0) {
+                console.log("All non-cancelled order rows are paid. Attempting to update parent order status to 'paid'.");
+                updateOrderStatus('paid');
+            }
+
+        } else if (order.order_rows && order.order_rows.length === 0 && order.orderStatus !== 'pending') {
+            // If there are no order rows, you might want to set a default status, e.g., 'new' or 'pending'
+            console.log("No order rows found. Setting order status to 'pending'.");
+            updateOrderStatus('pending');
+        }
+    }, [order.order_rows, order.orderStatus, order.documentId]);
+
+
     const handleOpenModal = () => setIsModalOpen(true);
     const handleCloseModal = () => setIsModalOpen(false);
 
-    const handleProductAddToOrder = async (product: ProductInfo, quantity: number, orderId: number) => {
+    const updateOrderStatus = async (newStatus: string) => {
+        try {
+            // Ensure no .attributes access here
+            const response = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/orders/${order.documentId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    data: {
+                        orderStatus: newStatus, // No 'data' wrapper if attributes are flattened
+                    }
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error("API Error updating order status:", errorData);
+                throw new Error(`Failed to update order status: ${errorData.error?.message || response.statusText}`);
+            }
+
+            console.log(`Order ${order.id} status updated to: ${newStatus}`);
+            setOrder((prevOrder) => ({
+                ...prevOrder,
+                orderStatus: newStatus,
+            }));
+
+        } catch (error: any) {
+            console.error("Error updating order status:", error);
+        }
+    };
+
+
+    const handleProductAddToOrder = async (product: ProductInfo, quantity: number, orderDocId: string, categoryDocId: string) => {
         if (!product || typeof product.price !== 'number') {
             alert("Selected product is invalid or missing price information.");
             return;
         }
 
-        const baseSubtotal = product.price * quantity;
-        const productVatRate = product.vat ?? 0; // Default to 0 if VAT is not defined
-        const calculatedTaxes = (baseSubtotal * productVatRate) / 100;
-        const finalSubtotal = baseSubtotal; // Assuming subtotal is pre-tax
+        const rowTotalWithTaxes = product.price * quantity;
+        const calculatedTaxes = (product.vat ?? 0) > 0 ? (rowTotalWithTaxes * (product.vat as number)) / (100 + (product.vat as number)) : 0;
 
+        // Ensure no .attributes access here
         const newOrderRowPayload = {
-            data: { // Strapi v4 expects a 'data' wrapper for POST/PUT
+            data: {
                 quantity: quantity,
-                subtotal: parseFloat(finalSubtotal.toFixed(2)),
+                subtotal: parseFloat(rowTotalWithTaxes.toFixed(2)),
                 taxesSubtotal: parseFloat(calculatedTaxes.toFixed(2)),
-                order_id: orderId,           // Relational field: ID of the order
-                product_id: product.id,      // Relational field: ID of the product
-                // productName: product.name, // Optional: denormalized data if your API supports it
-                // productPrice: product.price, // Optional: denormalized data
-                // createdAt and updatedAt will be set by Strapi
+                order_doc_id: orderDocId,
+                product_doc_id: product.documentId,
+                category_doc_id: categoryDocId,
+                orderRowStatus: 'pending'
             }
         };
 
         try {
+            // Ensure no .attributes access here
             const response = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/order-rows`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    // Add Authorization header if your API is protected
-                    // 'Authorization': `Bearer YOUR_API_TOKEN_OR_JWT`,
                 },
-                body: JSON.stringify(newOrderRowPayload),
+                body: JSON.stringify(newOrderRowPayload), // No 'data' wrapper if attributes are flattened
             });
 
             if (!response.ok) {
@@ -115,12 +199,8 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
                 throw new Error(`Failed to add product to order: ${errorData.error?.message || response.statusText}`);
             }
 
-            // const createdRow = await response.json(); // Contains the newly created order_row
-            // console.log("Product added successfully:", createdRow);
-
             handleCloseModal();
-            alert(`"${product.name}" x ${quantity} added successfully! Refreshing order details...`);
-            router.refresh(); // This re-runs the server component's data fetching
+            window.location.reload(); // This re-runs the server component's data fetching
 
         } catch (error: any) {
             console.error("Error adding product to order:", error);
@@ -130,12 +210,22 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
 
     const createdOrderForModal: CreatedOrderInfo = {
         id: order.id,
-        customerName: order.customerName || order.customer?.name || 'N/A',
+        documentId: order.documentId,
+        customerName: order.customerName || 'N/A', // Removed customer?.name
         tableName: order.tableName || 'N/A',
         orderStatus: order.orderStatus || 'N/A'
     };
 
+    // Filter out cancelled rows before calculating totals
+    const activeOrderRows = order.order_rows.filter(row => row.orderRowStatus !== 'cancelled');
+
+    const grandTotal = activeOrderRows.reduce((sum, row) => sum + row.subtotal, 0);
+    const totalTaxesSummedFromRows = activeOrderRows.reduce((sum, row) => sum + row.taxesSubtotal, 0);
+    const totalNoTaxes = activeOrderRows.reduce((sum, row) => sum + (row.subtotal - row.taxesSubtotal), 0);
+
+
     return (
+
         <main className="flex min-h-screen flex-col items-center px-4 sm:px-8 md:px-24 py-8 bg-background text-foreground">
             <div className='flex items-center justify-between w-full max-w-5xl mt-8 mb-6'>
                 <div className="logo-container">
@@ -148,43 +238,68 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
                 </Button>
             </div>
 
-            <h1 className="text-3xl sm:text-4xl font-bold my-8 text-primary">
-                Order #{order.id} - {order.customerName || order.customer?.name || 'Anonymous Customer'}
-            </h1>
+
+            <div className='my-8 text-center'>
+
+                <h1 className="text-3xl sm:text-4xl font-bold mb-4 text-primary">
+                    Order #{order.id} - {order.customerName || 'Anonymous Customer'} {/* Removed customer?.name */}
+                </h1>
+                <i>{order.documentId}</i>
+            </div>
 
             <div className="w-full max-w-5xl mt-4">
                 <h2 className="text-2xl font-semibold mb-3">Order Details:</h2>
-                <p><strong>Status:</strong> {order.orderStatus || 'N/D'}</p>
+                <p><strong>Status:</strong>
+                    <span
+                        className={
+                            order.orderStatus === 'pending'
+                                ? 'animate-pulse text-yellow-500 ms-2'
+                                : order.orderStatus === 'served'
+                                    ? 'text-green-500 ms-2'
+                                    : ''
+                        }
+                    >
+                        {order.orderStatus || 'N/D'}
+                    </span></p>
+
+
                 <p><strong>Table Name / Table Number:</strong> {order.tableName || 'N/D'}</p>
                 <p><strong>Created At:</strong> {new Date(order.createdAt).toLocaleString('it-IT')}</p>
                 <h3 className="text-xl font-semibold mt-6 mb-2">Products:</h3>
                 {order.order_rows && order.order_rows.length > 0 ? (
                     <ul className="divide-y divide-border">
                         {order.order_rows.map(row => (
-                            <li key={row.id} className="flex justify-between items-center py-3">
-                                <div>
-                                    <span className="font-medium">{row.quantity} x {row.product?.name || 'Prodotto sconosciuto'}</span>
-                                    {row.product?.price && (
-                                        <span className="text-sm text-muted-foreground ml-2">
-                                            (@ €{row.product.price.toFixed(2)} each)
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="text-right">
-                                    <span className="font-semibold block">€{row.subtotal.toFixed(2)}</span>
-                                    {row.taxes > 0 && (
-                                        <span className="text-xs text-muted-foreground block">
-                                            (Taxes: €{row.taxes.toFixed(2)})
-                                        </span>
-                                    )}
-                                    <span className="text-xs text-muted-foreground block">
-                                        Added: {new Date(row.createdAt).toLocaleString('it-IT')}
-                                    </span>
-                                </div>
-                            </li>
+                            <div key={row.documentId} className={`py-3 ${row.orderRowStatus === 'cancelled' ? 'opacity-50 line-through bg-gray-100 dark:bg-gray-800' : ''}`}>
+                                <OrderRowDisplay key={row.documentId} row={row} />
+                            </div>
+
                         ))}
                     </ul>
                 ) : <p>No items in this order yet.</p>}
+
+                {/* Display Totals */}
+                {/* Only display totals if there are active (non-cancelled) rows */}
+                {activeOrderRows.length > 0 && (
+                    <div className="mt-8 pt-4 border-t border-border">
+                        <div className="flex justify-between items-center text-lg font-semibold mb-2">
+                            <span>Subtotal (excluding taxes):</span>
+                            <span>€{totalNoTaxes.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-lg font-semibold mb-2">
+                            <span>Total Taxes:</span>
+                            <span>€{totalTaxesSummedFromRows.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-xl font-bold text-primary">
+                            <span>Grand Total:</span>
+                            <span>€{grandTotal.toFixed(2)}</span>
+                        </div>
+                    </div>
+                )}
+                 {activeOrderRows.length === 0 && order.order_rows.length > 0 && (
+                    <div className="mt-8 pt-4 border-t border-border text-center text-gray-500">
+                        <p>All items in this order have been cancelled.</p>
+                    </div>
+                )}
             </div>
 
             {isModalOpen && (

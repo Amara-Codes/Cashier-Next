@@ -14,6 +14,7 @@ module.exports = {
       screens: {
         "2xl": "1400px",
       },
+
     },
     extend: {
       colors: {
@@ -66,10 +67,22 @@ module.exports = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: 0 },
         },
+        "wiggle": {
+          "0%, 100%": { transform: "rotate(0deg)" },
+          "50%": { transform: "rotate(3deg)" },
+        },
+        "vibrate": {
+          "0%": { transform: "scale(0.99)", boxShadow: "2px 2px 10px 5px rgba(249, 115, 24, 0.7)" },
+          "50%": { transform: "scale(1)", boxShadow: "2px 2px 10px 5px rgba(249, 115, 24, 0.5)" },
+          "70%": { transform: "scale(1)", boxShadow: "2px 2px 10px 5px rgba(0, 0, 0, 0)" },
+          "100%": { transform: "scale(0.99)", boxShadow: "2px 2px 10px 5px rgba(249, 115, 24, 0.3)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "wiggle": "wiggle 1s ease-in-out infinite",
+        "vibrate": "vibrate 2s ease-in-out infinite",
       },
     },
   },

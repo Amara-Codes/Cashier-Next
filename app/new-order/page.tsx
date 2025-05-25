@@ -5,27 +5,29 @@ import React, { useState, useEffect } from 'react';
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import ProductSelectionModal from '@/components/ProductSelectionModal'; // Adjust path if needed
+import ProductSelectionModal from '@/components/ProductSelectionModal'; 
 
-// Define a type for the order data
+
 interface OrderData {
   customerName: string;
   tableName: string;
   orderStatus?: string;
 }
 
-// Define a type for product (used by both page and modal)
+
 interface Product {
   id: number;
+  documentId?: string; 
   name: string;
   price: number;
   description?: string;
   vat?: number;
 }
 
-// Define a type for the category data (used by both page and modal)
+
 interface Category {
   id: number;
+  documentId?: string; 
   name: string;
   products?: Product[];
 }
@@ -33,10 +35,10 @@ interface Category {
 // Define a type for the created order
 interface CreatedOrder {
   id: number;
+  documentId?: string; 
   customerName: string;
   tableName: string;
   orderStatus?: string;
-  documentId?: string; 
 }
 
 
@@ -71,11 +73,10 @@ export default function NewOrderPage() {
     };
 
     try {
-      // 1. Create a new order
       const orderResponse = await fetch(`${strapiUrl}/api/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: orderPayload }), // Strapi v4 expects payload under 'data'
+        body: JSON.stringify({ data: orderPayload }), 
       });
 
       if (!orderResponse.ok) {
@@ -85,7 +86,6 @@ export default function NewOrderPage() {
       }
 
       const newOrderResponse = await orderResponse.json();
-      // Strapi v4 returns the created entity nested under 'data'
       if (newOrderResponse && newOrderResponse.data) {
         setCreatedOrder(newOrderResponse.data);
         console.log('Order created successfully:', newOrderResponse.data);
@@ -94,7 +94,6 @@ export default function NewOrderPage() {
         throw new Error("Order created, but response format was unexpected. Check console.");
       }
 
-      // 2. Fetch categories and populate their products
       const categoriesApiUrl = `${strapiUrl}/api/categories?populate=*`;
       console.log("Fetching categories with URL:", categoriesApiUrl);
 
@@ -109,12 +108,13 @@ export default function NewOrderPage() {
       }
 
       const categoriesApiResponse = await categoriesResponse.json();
-      // Map Strapi's typical response structure (with 'attributes') to your flatter Category/Product types
       const fetchedCategories: Category[] = (categoriesApiResponse.data || []).map((catFromApi: any) => ({
         id: catFromApi.id,
         name: catFromApi.name ?? 'Unnamed Category',
+        documentId: catFromApi.documentId,
         products: (catFromApi.products || []).map((prodFromApi: any) => ({
           id: prodFromApi.id,
+          documentId: prodFromApi.documentId ?? "", 
           name: prodFromApi.name ?? 'Unnamed Product',
           price: prodFromApi.price ?? 0,
           description: prodFromApi.description,
@@ -139,14 +139,15 @@ export default function NewOrderPage() {
     }
   };
 
-  const handleProductAddToOrderCallback = async ( // Rendiamo la funzione async per usare await
+  const handleProductAddToOrderCallback = async ( 
     product: Product,
     quantity: number,
-    orderId: number
+    orderDocId: string,
+    categoryDocId: string, 
   ) => {
     //setUserMessage(null); // Opzionale: resetta messaggi precedenti
 
-    console.log(product)
+   
     // 1. Validazione dei dati di input (opzionale ma consigliata)
     if (typeof product.price !== 'number' || isNaN(product.price)) {
       console.error('Errore: prezzo del prodotto non valido.', product);
@@ -176,14 +177,16 @@ export default function NewOrderPage() {
 
     // 3. Preparazione del payload per la POST request
     const payload = {
-      order_id: orderId,
-      product_id: product.id,
+      order_doc_id: orderDocId,
+      product_doc_id: product.documentId,
+      category_doc_id: categoryDocId, // Aggiungiamo categoryId per il contesto
       quantity: quantity,
       subtotal: parseFloat(subtotal.toFixed(2)), // Arrotonda a 2 decimali, invia come numero
-      taxesSubtotal: parseFloat(taxes.toFixed(2))        // Arrotonda a 2 decimali, invia come numero
+      taxesSubtotal: parseFloat(taxes.toFixed(2)),  
+      orderRowStatus: 'pending'      // Arrotonda a 2 decimali, invia come numero
     };
 
-    console.log('Inviando POST a /order_rows con payload:', payload);
+   
 
     try {
       // 4. Effettua la chiamata POST
@@ -274,7 +277,7 @@ export default function NewOrderPage() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         categories={categories}
-        createdOrder={createdOrder || undefined} // Pass the ID of the created order
+        createdOrder={createdOrder} // Pass the ID of the created order
         onProductAddToOrder={handleProductAddToOrderCallback}
       />
     </main>
