@@ -249,7 +249,7 @@ export default function NewOrderPage() {
               className="block py-2.5 px-0 w-full text-sm text-foreground bg-transparent border-0 border-b-2 border-input appearance-none focus:outline-none focus:ring-0 focus:border-primary peer"
               placeholder=" " required value={customerName} onChange={(e) => setCustomerName(e.target.value)} disabled={isLoading}
             />
-            <label htmlFor="customer_name" className="peer-focus:font-medium absolute text-sm text-muted-foreground duration-300 transform -translate-y-6 scale-75 top-3 -z-10 origin-[0] peer-focus:start-0 rtl:peer-focus:translate-x-1/4 peer-focus:text-primary peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-6">
+            <label htmlFor="customer_name" className="peer-focus:font-medium absolute text-sm text-muted-foreground duration-300 transform -translate-y-8 scale-75 top-3 -z-10 origin-[0] peer-focus:start-0 rtl:peer-focus:translate-x-1/4 peer-focus:text-primary peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-8">
               Customer Name
             </label>
           </div>
@@ -259,10 +259,11 @@ export default function NewOrderPage() {
               className="block py-2.5 px-0 w-full text-sm text-foreground bg-transparent border-0 border-b-2 border-input appearance-none focus:outline-none focus:ring-0 focus:border-primary peer"
               placeholder=" " value={tableName} onChange={(e) => setTableName(e.target.value)} disabled={isLoading}
             />
-            <label htmlFor="table_name" className="peer-focus:font-medium absolute text-sm text-muted-foreground duration-300 transform -translate-y-6 scale-75 top-3 -z-10 origin-[0] peer-focus:start-0 rtl:peer-focus:translate-x-1/4 peer-focus:text-primary peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-6">
+            <label htmlFor="table_name" className="peer-focus:font-medium absolute text-sm text-muted-foreground duration-300 transform -translate-y-8 scale-75 top-3 -z-10 origin-[0] peer-focus:start-0 rtl:peer-focus:translate-x-1/4 peer-focus:text-primary peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-8">
               Table Name / Number (Optional)
             </label>
           </div>
+
           {error && <p className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">{error}</p>}
           <div className="mt-10 flex justify-end">
             <Button type="submit" disabled={isLoading || !customerName.trim()}>

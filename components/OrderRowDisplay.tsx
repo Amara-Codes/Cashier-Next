@@ -61,8 +61,8 @@ async function fetchCategoryById(categoryDocId: string): Promise<Category | null
         console.log("Raw category fetch response data:", data);
 
         // Assuming Strapi v4 structure: data.data is an array, and attributes contains the fields
-        if (Array.isArray(data?.data) && data.data.length > 0) {
-            const categoryData = data.data[0];
+        if (data?.data) {
+            const categoryData = data.data;
 
 
             console.log("Category data extracted----------------:", categoryData);
@@ -73,17 +73,9 @@ async function fetchCategoryById(categoryDocId: string): Promise<Category | null
                     id: categoryData.id,
                     documentId: categoryData.documentId, // Use documentId if available, fallback to id
                     name: categoryData.name,
-                    products: categoryData.products || [],
+                  
                 };
-            } else if (categoryData.name) { // Fallback for older Strapi or different config
-                console.log(`Category found (no attributes): ${categoryData.name}`);
-                return {
-                    id: categoryData.id,
-                    documentId: categoryData.documentId,
-                    name: categoryData.name,
-                    products: categoryData.products || [],
-                };
-            }
+            } 
         }
         console.warn(`No category data found for ID: ${categoryDocId} in response.`);
         return null;

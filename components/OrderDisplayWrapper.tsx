@@ -95,6 +95,7 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
             );
             // Consider only non-cancelled rows for overall status check
             const nonCancelledRows = order.order_rows.filter(row => row.orderRowStatus !== 'cancelled');
+            const allRowsCancelled = order.order_rows.every(row => row.orderRowStatus === 'cancelled');
 
             const allNonCancelledRowsServed = nonCancelledRows.every(
                 (row) => row.orderRowStatus === 'served'
@@ -117,6 +118,11 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
                 updateOrderStatus('paid');
             }
 
+            if (allRowsCancelled && order.orderStatus !== 'cancelled') {
+                console.log("All order rows are cancelled. Attempting to update parent order status to 'cancelled'.");
+                updateOrderStatus('cancelled');
+            }
+
         } else if (order.order_rows && order.order_rows.length === 0 && order.orderStatus !== 'pending') {
             // If there are no order rows, you might want to set a default status, e.g., 'new' or 'pending'
             console.log("No order rows found. Setting order status to 'pending'.");
@@ -136,7 +142,7 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     data: {
                         orderStatus: newStatus, // No 'data' wrapper if attributes are flattened
                     }
@@ -241,10 +247,9 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
 
             <div className='my-8 text-center'>
 
-                <h1 className="text-3xl sm:text-4xl font-bold mb-4 text-primary">
+                <h1 className="text-3xl sm:text-4xl font-bold text-primary">
                     Order #{order.id} - {order.customerName || 'Anonymous Customer'} {/* Removed customer?.name */}
                 </h1>
-                <i>{order.documentId}</i>
             </div>
 
             <div className="w-full max-w-5xl mt-4">
@@ -256,7 +261,11 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
                                 ? 'animate-pulse text-yellow-500 ms-2'
                                 : order.orderStatus === 'served'
                                     ? 'text-green-500 ms-2'
-                                    : ''
+                                    : order.orderStatus === 'paid'
+                                        ? 'text-blue-500 ms-2'
+                                        : order.orderStatus === 'cancelled'
+                                            ? 'text-red-500 ms-2'
+                                            : 'text-gray-500 ms-2'
                         }
                     >
                         {order.orderStatus || 'N/D'}
@@ -295,7 +304,7 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
                         </div>
                     </div>
                 )}
-                 {activeOrderRows.length === 0 && order.order_rows.length > 0 && (
+                {activeOrderRows.length === 0 && order.order_rows.length > 0 && (
                     <div className="mt-8 pt-4 border-t border-border text-center text-gray-500">
                         <p>All items in this order have been cancelled.</p>
                     </div>
