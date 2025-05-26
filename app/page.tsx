@@ -4,7 +4,6 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 
 // Define interfaces for your data structures, consistent with OrderDisplayWrapper.tsx
-// Removed CustomerInfo interface as it's no longer used
 interface OrderRow {
   id: number;
   documentId: string;
@@ -25,6 +24,7 @@ interface Order {
   tableName?: string;
   customerName?: string;
   createdAt: string;
+  paymentDaytime?: string; // Add this field to the Order interface
   order_rows: OrderRow[];
 }
 
@@ -33,15 +33,15 @@ export default async function Home() {
 
   let servedOrders: Order[] = [];
   let pendingOrders: Order[] = [];
+  let todayPaidOrders: Order[] = []; // New array for today's paid orders
 
   try {
-    // Removed populate=customer from the API call as we no longer need customer data
     const response = await fetch(`${STRAPI_URL}/api/orders`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
       },
-      cache: 'no-store',
+      cache: 'no-store', // Ensure fresh data
     });
 
     if (!response.ok) {
@@ -50,6 +50,7 @@ export default async function Home() {
       console.error('Error details:', errorData);
       servedOrders = [];
       pendingOrders = [];
+      todayPaidOrders = [];
     } else {
       const { data } = await response.json();
       const allOrders: Order[] = data.map((item: any) => ({
@@ -57,8 +58,9 @@ export default async function Home() {
         documentId: item.documentId,
         orderStatus: item.orderStatus,
         tableName: item.tableName,
-        customerName: item.customerName, // Directly access customerName if it's a field on the order
+        customerName: item.customerName,
         createdAt: item.createdAt,
+        paymentDaytime: item.paymentDaytime, // Map the paymentDaytime field
         order_rows: item.order_rows?.data ? item.order_rows.data.map((row: any) => ({
           id: row.id,
           documentId: row.documentId,
@@ -73,13 +75,27 @@ export default async function Home() {
         })) : [],
       }));
 
+      const today = new Date();
+      // Set hours, minutes, seconds, and milliseconds to 0 for accurate date comparison
+      today.setHours(0, 0, 0, 0);
+
       servedOrders = allOrders.filter(order => order.orderStatus === 'served');
       pendingOrders = allOrders.filter(order => order.orderStatus === 'pending');
+
+      todayPaidOrders = allOrders.filter(order => {
+        if (order.orderStatus === 'paid' && order.paymentDaytime) {
+          const paymentDate = new Date(order.paymentDaytime);
+          paymentDate.setHours(0, 0, 0, 0); // Normalize to start of day
+          return paymentDate.getTime() === today.getTime();
+        }
+        return false;
+      });
     }
   } catch (error) {
     console.error("Error fetching orders:", error);
     servedOrders = [];
     pendingOrders = [];
+    todayPaidOrders = [];
   }
 
   return (
@@ -136,7 +152,6 @@ export default async function Home() {
                   <div className="p-4 border-2 border-solid border-green-400 rounded-lg shadow-sm hover:shadow-lg transition-shadow cursor-pointer bg-green-50">
                     <p className="font-bold text-lg text-gray-900">Table: {order.tableName || 'N/A'}</p>
                     <p className="font-bold text-lg text-green-500 mb-4">{order.customerName}</p>
-                    {/* Removed customer name display here */}
                     <p className="text-sm text-gray-600">Created: <span className="font-semibold text-green-600">{`${new Date(order.createdAt).getHours()}:${new Date(order.createdAt).getMinutes()}`}</span></p>
                   </div>
                 </Link>
@@ -146,6 +161,28 @@ export default async function Home() {
             <p className="text-gray-600">No served orders yet.</p>
           )}
         </div>
+      </div>
+
+      ---
+
+      {/* Today's Paid Orders Section */}
+      <div className="w-full max-w-6xl mt-8 p-4 bg-card rounded-lg shadow-md">
+        <h2 className="text-2xl font-semibold mb-4 text-blue-500 text-center">Today's Paid Orders</h2>
+        {todayPaidOrders.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4 w-full">
+            {todayPaidOrders.map((order) => (
+              <Link key={order.documentId} href={`/order/${order.documentId}`} passHref>
+                <div className=" border-stone-500 border-b-2 mx-4 pb-4">
+                  <p className="font-bold text-lg mb-4">{order.customerName}</p>
+                  <p className="font-bold text-lg">Table: {order.tableName || 'N/A'}</p>
+                  <p className="text-sm text-gray-600">Paid at: <span className="font-semibold text-blue-600">{new Date(order.paymentDaytime!).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</span></p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-600 text-center">No paid orders today yet.</p>
+        )}
       </div>
     </main>
   );

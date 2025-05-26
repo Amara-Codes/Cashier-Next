@@ -233,7 +233,6 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
     };
 
     const handlePayment = (totalAmount: number | string, paymentMethod: 'QR' | 'cash') => {
-        console.log(`Payment received: $${totalAmount} via ${paymentMethod}`);
         if (processedOrderRows.length) {
             processedOrderRows.forEach(row => {
                 fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/order-rows/${row.documentId}`, {
@@ -258,12 +257,42 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
             });
         }
 
+         // --- Start of Modified Logic for appliedDiscount ---
+        const appliedDiscountsList: string[] = [];
+        if (khmerCustomerDiscount) {
+            appliedDiscountsList.push("Khmer Customer Discount (Beer prices adjusted)");
+        }
+        if (cbacMembersDiscount) {
+            appliedDiscountsList.push("CBAC Members Discount (Beer: -$1 per item)");
+        }
+        if (kandalVillageFriendDiscount) {
+            appliedDiscountsList.push("Kandal Village Friend Discount (15% off order row)");
+        }
+        if (customDiscount.value > 0) {
+            const customDiscountText = customDiscount.type === 'dollar'
+                ? `Custom Discount: -$${customDiscount.value.toFixed(2)}`
+                : `Custom Discount: ${customDiscount.value.toFixed(1)}% off`;
+            appliedDiscountsList.push(customDiscountText);
+        }
+
+        const appliedDiscountString = appliedDiscountsList.length > 0
+            ? appliedDiscountsList.join("; ")
+            : "No discounts applied";
+      
+
+        const checkoutInfo = { 
+            paymentMethod: paymentMethod,
+            paidAmount: totalAmount,
+            paymentDaytime: new Date().toISOString(),
+            appliedDiscount: appliedDiscountString,
+            orderStatus: 'paid',
+        }
         fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/orders/${order.documentId}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ data: { orderStatus: 'paid' } }),
+            body: JSON.stringify({ data: checkoutInfo }),
         }).then(response => {
             if (!response.ok) {
                 throw new Error(`Failed to update order ${order.documentId}`);
@@ -272,7 +301,7 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
         })
             .then(data => {
                 console.log(`Order ${order.documentId} updated to paid:`, data);
-                window.location.reload()
+                window.location.href = '/'; // Redirect to home after payment
             })
             .catch(error => {
                 console.error(`Error updating order ${order.documentId}:`, error);
@@ -335,7 +364,7 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
                     <ul className="divide-y divide-border">
                         {processedOrderRows.map(row => (
                             <div key={row.documentId} className={`py-3 ${row.orderRowStatus === 'cancelled' ? 'opacity-50 line-through bg-gray-100 dark:bg-gray-800' : ''}`}>
-                                <OrderRowDisplay key={row.documentId} row={row} />
+                                <OrderRowDisplay key={row.documentId} row={row} showPaidSwitcher={true}/>
                             </div>
                         ))}
                     </ul>

@@ -38,6 +38,8 @@ interface OrderRow {
 
 interface OrderItemProps {
     row: OrderRow;
+    showPaidSwitcher?: boolean;
+    showSwitcher?: boolean;// New prop: controls visibility of paid status switcher
 }
 
 async function fetchCategoryById(categoryDocId: string): Promise<Category | null> {
@@ -73,9 +75,8 @@ async function fetchCategoryById(categoryDocId: string): Promise<Category | null
                     id: categoryData.id,
                     documentId: categoryData.documentId, // Use documentId if available, fallback to id
                     name: categoryData.name,
-                  
                 };
-            } 
+            }
         }
         console.warn(`No category data found for ID: ${categoryDocId} in response.`);
         return null;
@@ -85,12 +86,12 @@ async function fetchCategoryById(categoryDocId: string): Promise<Category | null
     }
 }
 
-const OrderRowDisplay: React.FC<OrderItemProps> = ({ row }) => {
+const OrderRowDisplay: React.FC<OrderItemProps> = ({ row, showPaidSwitcher = false, showSwitcher = false }) => { // Set default to false
     const [categoryName, setCategoryName] = useState<string>('');
 
     useEffect(() => {
         async function loadCategory() {
-           
+
             console.log("Current row.category_id:", row.category_doc_id);
 
             if (row.category_doc_id) {
@@ -120,7 +121,7 @@ const OrderRowDisplay: React.FC<OrderItemProps> = ({ row }) => {
             <div className='w-1/2'>
                 <div>
                     <span className="font-medium">
-                        
+
                         {row.quantity} x {row.product?.name || 'Prodotto sconosciuto'}
                     </span>
                     {row.product?.price && (
@@ -138,7 +139,16 @@ const OrderRowDisplay: React.FC<OrderItemProps> = ({ row }) => {
                     )}
                 </div>
             </div>
-            <OrderRowStatusSwitcher orderRowId={row.documentId ?? ''} initialStatus={row.orderRowStatus ?? 'pending'} onStatusChange={() => window.location.reload()} />
+            {showSwitcher && (
+                <OrderRowStatusSwitcher
+                    orderRowId={row.documentId ?? ''}
+                    initialStatus={row.orderRowStatus ?? 'pending'}
+                    onStatusChange={() => window.location.reload()}
+                    showingPaidStatus={showPaidSwitcher} // Pass the value of showPaidSwitcher
+                />
+            )}
+
+
             <div className="text-right">
                 <span className="font-semibold block">€{row.subtotal.toFixed(2)}</span>
                 {row.taxesSubtotal > 0 && (

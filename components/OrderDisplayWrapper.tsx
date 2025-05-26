@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import ProductSelectionModal from '@/components/ProductSelectionModal';
 import OrderRowDisplay from '@/components/OrderRowDisplay'; // Adjust path as necessary
 import { Button } from "@/components/ui/button";
-import { data } from 'autoprefixer';
+// import { data } from 'autoprefixer'; // This import seems unused and might cause issues. Removed it.
 
 
 type OrderRowStatus = 'pending' | 'served' | 'paid' | 'cancelled';
@@ -36,21 +36,12 @@ interface OrderRow { // From page.tsx
     orderRowStatus?: OrderRowStatus; // Added for clarity
 }
 
-// REMOVED CustomerInfo interface as requested
-// interface CustomerInfo {
-//     id: number;
-//     documentId?: string;
-//     name: string;
-//     email?: string;
-// }
-
 interface Order { // From page.tsx
     id: number;
     documentId?: string; // Added for clarity
     orderStatus?: string;
     tableName?: string;
     customerName?: string; // Keep customerName if it's a direct attribute on Order
-    // REMOVED customer?: CustomerInfo;
     createdAt: string;
     order_rows: OrderRow[];
 }
@@ -88,46 +79,49 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
 
     // NEW useEffect for managing order status based on order_rows
     useEffect(() => {
-        // Only proceed if there are order rows
-        if (order.order_rows && order.order_rows.length > 0) {
-            const hasPendingRows = order.order_rows.some(
-                (row) => row.orderRowStatus === 'pending'
-            );
-            // Consider only non-cancelled rows for overall status check
+        // Only proceed if there are order rows or if there were rows that are now all cancelled
+        if (order.order_rows) {
             const nonCancelledRows = order.order_rows.filter(row => row.orderRowStatus !== 'cancelled');
-            const allRowsCancelled = order.order_rows.every(row => row.orderRowStatus === 'cancelled');
+            const allRowsCancelled = order.order_rows.length > 0 && order.order_rows.every(row => row.orderRowStatus === 'cancelled');
 
-            const allNonCancelledRowsServed = nonCancelledRows.every(
-                (row) => row.orderRowStatus === 'served'
-            );
-            const allNonCancelledRowsPaid = nonCancelledRows.every(
+            const allNonCancelledRowsPaid = nonCancelledRows.length > 0 && nonCancelledRows.every(
                 (row) => row.orderRowStatus === 'paid'
             );
+            // "All served" means all non-cancelled rows are either 'served' or 'paid'
+            const allNonCancelledRowsServed = nonCancelledRows.length > 0 && nonCancelledRows.every(
+                (row) => row.orderRowStatus === 'served' || row.orderRowStatus === 'paid'
+            );
+            const anyNonCancelledRowIsPending = nonCancelledRows.some(
+                (row) => row.orderRowStatus === 'pending'
+            );
 
-            console.log("Checking order rows for status changes:", order.order_rows);
+            console.log("Checking order rows for status changes (current order status:", order.orderStatus, "):", order.order_rows);
+            console.log({ allRowsCancelled, allNonCancelledRowsPaid, allNonCancelledRowsServed, anyNonCancelledRowIsPending });
 
-            if (hasPendingRows && order.orderStatus !== 'pending') {
-                console.log("Found pending order rows. Attempting to update parent order status to 'pending'.");
-                updateOrderStatus('pending');
-            } else if (allNonCancelledRowsServed && order.orderStatus !== 'served' && order.orderStatus !== 'paid' && nonCancelledRows.length > 0) {
-                // Only update to 'served' if not already 'served' or 'paid' and there are actual non-cancelled items
-                console.log("All non-cancelled order rows are served. Attempting to update parent order status to 'served'.");
-                updateOrderStatus('served');
-            } else if (allNonCancelledRowsPaid && order.orderStatus !== 'paid' && nonCancelledRows.length > 0) {
-                console.log("All non-cancelled order rows are paid. Attempting to update parent order status to 'paid'.");
-                updateOrderStatus('paid');
+            let newCalculatedOrderStatus: string | undefined;
+
+            // Prioritize statuses from most "final" to most "initial" for determination
+            if (allRowsCancelled) {
+                newCalculatedOrderStatus = 'cancelled';
+            } else if (allNonCancelledRowsPaid) {
+                newCalculatedOrderStatus = 'paid';
+            } else if (allNonCancelledRowsServed) { // All non-cancelled items are served (or paid)
+                newCalculatedOrderStatus = 'served';
+            } else if (anyNonCancelledRowIsPending || nonCancelledRows.length === 0) {
+                // If there are any pending non-cancelled rows, or if there are no non-cancelled rows at all (e.g., just added an order)
+                newCalculatedOrderStatus = 'pending';
             }
+            // If nonCancelledRows.length > 0 but no row is pending, served or paid, this implies an error or an intermediate state not covered.
+            // For example, if a row exists but its status is something unexpected. In a healthy system, this shouldn't occur.
 
-            if (allRowsCancelled && order.orderStatus !== 'cancelled') {
-                console.log("All order rows are cancelled. Attempting to update parent order status to 'cancelled'.");
-                updateOrderStatus('cancelled');
+            console.log("New calculated order status:", newCalculatedOrderStatus);
+
+            if (newCalculatedOrderStatus && newCalculatedOrderStatus !== order.orderStatus) {
+                updateOrderStatus(newCalculatedOrderStatus)
             }
-
-        } else if (order.order_rows && order.order_rows.length === 0 && order.orderStatus !== 'pending') {
-            // If there are no order rows, you might want to set a default status, e.g., 'new' or 'pending'
-            console.log("No order rows found. Setting order status to 'pending'.");
-            updateOrderStatus('pending');
         }
+        // This covers the initial case of an order with no rows, ensuring it starts as 'pending'
+
     }, [order.order_rows, order.orderStatus, order.documentId]);
 
 
@@ -229,6 +223,8 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
     const totalTaxesSummedFromRows = activeOrderRows.reduce((sum, row) => sum + row.taxesSubtotal, 0);
     const totalNoTaxes = activeOrderRows.reduce((sum, row) => sum + (row.subtotal - row.taxesSubtotal), 0);
 
+    // Determine if the checkout button should be disabled
+    const isCheckoutDisabled = order.orderStatus !== 'served';
 
     return (
 
@@ -239,16 +235,30 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
                         <Image src="/logo.png" alt="Logo" width={80} height={80} className="logo" priority />
                     </Link>
                 </div>
-                <Button onClick={handleOpenModal} size="lg">
-                    Add Product to Order
-                </Button>
+                <div className='flex gap-x-2'>
+                    {/* Conditional rendering for Link and Button's disabled state */}
+                    {isCheckoutDisabled ? (
+                        <Button className='bg-emerald-500 text-white' size="lg" disabled>
+                            Checkout
+                        </Button>
+                    ) : (
+                        <Link href={`/checkout/${initialOrder.documentId}`} passHref>
+                            <Button className='bg-emerald-500 text-white' size="lg">
+                                Checkout
+                            </Button>
+                        </Link>
+                    )}
+                    <Button onClick={handleOpenModal} size="lg">
+                        Add Product to Order
+                    </Button>
+                </div>
             </div>
 
 
             <div className='my-8 text-center'>
 
                 <h1 className="text-3xl sm:text-4xl font-bold text-primary">
-                    Order #{order.id} - {order.customerName || 'Anonymous Customer'} {/* Removed customer?.name */}
+                    Order #{order.id} - {order.customerName || 'Anonymous Customer'}
                 </h1>
             </div>
 
@@ -279,7 +289,8 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
                     <ul className="divide-y divide-border">
                         {order.order_rows.map(row => (
                             <div key={row.documentId} className={`py-3 ${row.orderRowStatus === 'cancelled' ? 'opacity-50 line-through bg-gray-100 dark:bg-gray-800' : ''}`}>
-                                <OrderRowDisplay key={row.documentId} row={row} />
+                                {/* Pass showingPaidStatus={false} to hide the paid button in order rows */}
+                                <OrderRowDisplay key={row.documentId} row={row} showPaidSwitcher={false} showSwitcher={true}/>
                             </div>
 
                         ))}
