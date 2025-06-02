@@ -7,15 +7,6 @@ import OrderDisplayWrapper from "@/components/OrderDisplayWrapper"; // Importa i
 // Definisci le tue interfacce esistenti: ProductInfo, OrderRow, CustomerInfo, Order, Category, Product
 type OrderRowStatus = 'pending' | 'served' | 'paid' | 'cancelled';
 
-interface ProductInfo {
-    id: number;
-    documentId?: string; // Opzionale per consistenza con OrderRow
-    name: string;
-    price: number;
-    vat?: number; // Aggiunto per consistenza con modale e calcoli
-    description?: string; // Aggiunto per consistenza
-}
-
 interface OrderRow { // From page.tsx
     id: number;
     documentId: string; // Added for clarity
@@ -25,9 +16,10 @@ interface OrderRow { // From page.tsx
     category_doc_id?: string; // Optional for consistency with OrderRow
     product_doc_id?: string; // Changed to productId for clarity
     order_doc_id?: string;
-    product?: ProductInfo;
+    product?: Product;
     createdAt: string;
-    orderRowStatus?: OrderRowStatus; // Added for clarity
+    orderRowStatus?: OrderRowStatus;
+    updatedAt: string
 }
 
 interface CustomerInfo {
@@ -49,11 +41,12 @@ interface Order {
 
 interface Product {
     id: number;
-    documentId?: string;
+    documentId: string;
     name: string;
     price: number;
     description?: string;
     vat?: number;
+    imageUrl?: string;
 }
 
 interface Category {
@@ -69,7 +62,7 @@ interface Category {
  */
 async function getCategories(): Promise<Category[]> {
     try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/categories?populate=*`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/categories?populate[products][populate]=*`, {
             cache: 'no-store', // Assicura che i dati siano sempre freschi
         });
         if (!response.ok) {
@@ -83,14 +76,24 @@ async function getCategories(): Promise<Category[]> {
             id: cat.id,
             name: cat.name,
             documentId: cat.documentId,// Rimosso .attributes
-            products: cat.products?.map((prod: any): Product => ({ // Rimosso .data e .attributes
-                id: prod.id,
-                documentId: prod.documentId,
-                name: prod.name,
-                price: prod.price,
-                description: prod.description,
-                vat: prod.vat,
-            })) || [],
+            products: (cat.products || [])
+                .map((prodFromApi: any) => ({
+                    id: prodFromApi.id,
+                    documentId: prodFromApi.documentId ?? "",
+                    name: prodFromApi.name ?? 'Unnamed Product',
+                    price: prodFromApi.price ?? 0,
+                    description: prodFromApi.description,
+                    vat: prodFromApi.vat ?? 0,
+                    imageUrl: prodFromApi.image?.formats?.thumbnail?.url
+                }))
+                .sort((a: Product, b: Product) => {
+                    if (a.price !== b.price) {
+                        return a.price - b.price;
+                    }
+                    const nameA = (a.name || '').replace(/\s+/g, '').toLowerCase();
+                    const nameB = (b.name || '').replace(/\s+/g, '').toLowerCase();
+                    return nameA.localeCompare(nameB);
+                })
         }));
     } catch (error) {
         console.error("Error fetching categories:", error);
@@ -147,19 +150,21 @@ async function getOrderData(orderDocId: string): Promise<Order | null> {
         const orderRowsResponseData = await orderRowsResponse.json();
         let fetchedOrderRows: OrderRow[] = [];
         if (orderRowsResponseData.data && Array.isArray(orderRowsResponseData.data)) {
+
             fetchedOrderRows = await Promise.all(orderRowsResponseData.data.map(async (item: any) => {
                 const rowAttributes = item; // Rimosso .attributes
 
-                let product: ProductInfo | undefined = undefined;
+                let product: Product | undefined = undefined;
                 if (rowAttributes.product_doc_id) {
                     try {
                         const productRes = await fetch(
-                            `${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/products/${rowAttributes.product_doc_id}`,
+                            `${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/products/${rowAttributes.product_doc_id}?populate=*`,
                             { cache: 'no-store' }
                         );
                         if (productRes.ok) {
                             const productData = await productRes.json();
                             if (productData.data) {
+                                console.log(productData)
                                 product = {
                                     id: productData.data.id,
                                     documentId: productData.data.documentId,
@@ -167,6 +172,7 @@ async function getOrderData(orderDocId: string): Promise<Order | null> {
                                     price: productData.data.price,
                                     vat: productData.data.vat,
                                     description: productData.data.description,
+                                    imageUrl: productData.data.image?.formats?.thumbnail?.url
                                 };
 
 
@@ -181,7 +187,8 @@ async function getOrderData(orderDocId: string): Promise<Order | null> {
                                     category_doc_id: rowAttributes.category_doc_id, // Rimosso .data
                                     createdAt: rowAttributes.createdAt,
                                     orderRowStatus: rowAttributes.orderRowStatus,
-                                    product: product, // Aggiunto il prodotto recuperato
+                                    product: product,
+                                    updatedAt: rowAttributes.updatedAt// Aggiunto il prodotto recuperato
 
                                 };
                                 return row;

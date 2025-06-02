@@ -2,7 +2,7 @@
 import React from 'react';
 import OrderRowStatusSwitcher from '@/components/OrderRowStatusSwitcher';
 import { useEffect, useState } from 'react';
-
+import Image from 'next/image';
 
 type OrderRowStatus = 'pending' | 'served' | 'paid' | 'cancelled';
 
@@ -10,16 +10,17 @@ interface Category {
     id: number;
     documentId?: string; // Optional for consistency with OrderRow
     name: string;
-    products?: ProductInfo[];
+    products?: Product[];
 }
 
-interface ProductInfo {
+interface Product {
     id: number;
     documentId?: string; // Optional for consistency with OrderRow
     name: string;
     price: number;
     description?: string;
     vat?: number;
+    imageUrl?: string
 }
 
 interface OrderRow {
@@ -31,9 +32,10 @@ interface OrderRow {
     product_doc_id?: string;
     order_doc_id?: string;
     category_doc_id?: string;
-    product?: ProductInfo;
+    product?: Product;
     createdAt: string;
     orderRowStatus?: OrderRowStatus;
+    updatedAt: string
 }
 
 interface OrderItemProps {
@@ -125,19 +127,32 @@ const OrderRowDisplay: React.FC<OrderItemProps> = ({ row, showPaidSwitcher = fal
                         {row.quantity} x {row.product?.name || 'Prodotto sconosciuto'}
                     </span>
                     {row.product?.price && (
-                        <span className="text-sm text-muted-foreground ml-2">
+                        <span className="text-sm text-muted-foreground block">
                             (@ €{row.product.price.toFixed(2)} each)
                         </span>
+                    )}
+
+                    {row.product?.imageUrl && (
+                        <div className='block mt-4'>
+                            <Image
+                                src={`${process.env.NEXT_PUBLIC_STRAPI_URL}${row.product.imageUrl}`}
+                                alt={row.product.name || 'Product Image'}
+                                width={200}
+                                height={200}
+                                className='border rounded-md mx-4'
+                            />
+                        </div>
                     )}
                 </div>
                 <div>
                     {/* Only render if categoryName has a value */}
                     {categoryName && (
-                        <span className="text-xs text-muted-foreground">
-                            {categoryName}
-                        </span>
+                        <div className="text-xs text-muted-foreground mt-2">
+                           <strong>Category: </strong> <span className='text-primary'> {categoryName}</span>
+                        </div>
                     )}
                 </div>
+
             </div>
             {showSwitcher && (
                 <OrderRowStatusSwitcher
@@ -158,6 +173,9 @@ const OrderRowDisplay: React.FC<OrderItemProps> = ({ row, showPaidSwitcher = fal
                 )}
                 <span className="text-xs text-muted-foreground block">
                     Added: {new Date(row.createdAt).toLocaleString('it-IT')}
+                </span>
+                <span className="text-xs text-muted-foreground block">
+                    Updated: {new Date(row.updatedAt).toLocaleString('it-IT')}
                 </span>
             </div>
         </li>

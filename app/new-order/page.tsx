@@ -112,14 +112,23 @@ export default function NewOrderPage() {
         id: catFromApi.id,
         name: catFromApi.name ?? 'Unnamed Category',
         documentId: catFromApi.documentId,
-        products: (catFromApi.products || []).map((prodFromApi: any) => ({
-          id: prodFromApi.id,
-          documentId: prodFromApi.documentId ?? "", 
-          name: prodFromApi.name ?? 'Unnamed Product',
-          price: prodFromApi.price ?? 0,
-          description: prodFromApi.description,
-          vat: prodFromApi.vat ?? 0,
-        })),
+        products: (catFromApi.products || [])
+          .map((prodFromApi: any) => ({
+            id: prodFromApi.id,
+            documentId: prodFromApi.documentId ?? "",
+            name: prodFromApi.name ?? 'Unnamed Product',
+            price: prodFromApi.price ?? 0,
+            description: prodFromApi.description,
+            vat: prodFromApi.vat ?? 0,
+          }))
+          .sort((a: Product, b: Product) => {
+            if (a.price !== b.price) {
+              return a.price - b.price;
+            }
+            const nameA = (a.name || '').replace(/\s+/g, '').toLowerCase();
+            const nameB = (b.name || '').replace(/\s+/g, '').toLowerCase();
+            return nameA.localeCompare(nameB);
+          })
       }));
 
       setCategories(fetchedCategories);

@@ -163,7 +163,7 @@ export default async function Home() {
         </div>
       </div>
 
-      ---
+  
 
       {/* Today's Paid Orders Section */}
       <div className="w-full max-w-6xl mt-8 p-4 bg-card rounded-lg shadow-md">

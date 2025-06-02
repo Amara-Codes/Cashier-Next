@@ -39,6 +39,7 @@ interface OrderRow {
     product?: ProductInfo;
     createdAt: string;
     orderRowStatus?: OrderRowStatus;
+    updatedAt: string
 }
 
 interface Order {

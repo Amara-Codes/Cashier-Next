@@ -13,13 +13,14 @@ import { Button } from "@/components/ui/button";
 
 type OrderRowStatus = 'pending' | 'served' | 'paid' | 'cancelled';
 // Re-use or import existing interfaces (ensure they are consistent)
-interface ProductInfo { // From ProductSelectionModal's Product type / page.tsx ProductInfo
+interface Producs { // From ProductSelectionModal's Product type / page.tsx Producs
     id: number;
     documentId?: string;
     name: string;
     price: number;
     description?: string;
-    vat?: number; // Crucial for tax calculation
+    vat?: number;
+    imageUrl?: string // Crucial for tax calculation
 }
 
 interface OrderRow { // From page.tsx
@@ -31,9 +32,10 @@ interface OrderRow { // From page.tsx
     category_doc_id?: string; // Optional for consistency with OrderRow
     product_doc_id?: string; // Changed to productId for clarity
     order_doc_id?: string;
-    product?: ProductInfo;
+    product?: Producs;
     createdAt: string;
-    orderRowStatus?: OrderRowStatus; // Added for clarity
+    orderRowStatus?: OrderRowStatus;
+    updatedAt: string
 }
 
 interface Order { // From page.tsx
@@ -50,7 +52,7 @@ interface Category { // From ProductSelectionModal / page.tsx
     id: number;
     documentId?: string;
     name: string;
-    products?: ProductInfo[];
+    products?: Producs[];
 }
 
 // For the modal's createdOrder prop
@@ -71,7 +73,6 @@ interface OrderDisplayWrapperProps {
 export default function OrderDisplayWrapper({ initialOrder, categories }: OrderDisplayWrapperProps) {
     const [order, setOrder] = useState<Order>(initialOrder);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const router = useRouter();
 
     useEffect(() => {
         setOrder(initialOrder);
@@ -161,7 +162,7 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
     };
 
 
-    const handleProductAddToOrder = async (product: ProductInfo, quantity: number, orderDocId: string, categoryDocId: string) => {
+    const handleProductAddToOrder = async (product: Producs, quantity: number, orderDocId: string, categoryDocId: string) => {
         if (!product || typeof product.price !== 'number') {
             alert("Selected product is invalid or missing price information.");
             return;
@@ -235,23 +236,27 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
                         <Image src="/logo.png" alt="Logo" width={80} height={80} className="logo" priority />
                     </Link>
                 </div>
-                <div className='flex gap-x-2'>
-                    {/* Conditional rendering for Link and Button's disabled state */}
-                    {isCheckoutDisabled ? (
-                        <Button className='bg-emerald-500 text-white' size="lg" disabled>
-                            Checkout
-                        </Button>
-                    ) : (
-                        <Link href={`/checkout/${initialOrder.documentId}`} passHref>
-                            <Button className='bg-emerald-500 text-white' size="lg">
+                {order.orderStatus !== 'paid' && (
+                    <div className='flex gap-x-2'>
+
+                        {isCheckoutDisabled ? (
+                            <Button className='bg-emerald-500 text-white' size="lg" disabled>
                                 Checkout
                             </Button>
-                        </Link>
-                    )}
-                    <Button onClick={handleOpenModal} size="lg">
-                        Add Product to Order
-                    </Button>
-                </div>
+                        ) : (
+                            <Link href={`/checkout/${initialOrder.documentId}`} passHref>
+                                <Button className='bg-emerald-500 text-white' size="lg">
+                                    Checkout
+                                </Button>
+                            </Link>
+                        )}
+                        <Button onClick={handleOpenModal} size="lg">
+                            Add Product to Order
+                        </Button>
+                    </div>
+
+                )}
+
             </div>
 
 
@@ -290,7 +295,7 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
                         {order.order_rows.map(row => (
                             <div key={row.documentId} className={`py-3 ${row.orderRowStatus === 'cancelled' ? 'opacity-50 line-through bg-gray-100 dark:bg-gray-800' : ''}`}>
                                 {/* Pass showingPaidStatus={false} to hide the paid button in order rows */}
-                                <OrderRowDisplay key={row.documentId} row={row} showPaidSwitcher={false} showSwitcher={true}/>
+                                <OrderRowDisplay key={row.documentId} row={row} showPaidSwitcher={false} showSwitcher={true && order.orderStatus !== 'paid'} />
                             </div>
 
                         ))}

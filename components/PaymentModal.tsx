@@ -51,11 +51,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
                         <div className="flex items-center space-x-4 ps-2">
                             <RadioGroupItem value="QR" id="type-QR" />
-                            <Label htmlFor="type-QR">QR</Label>
+                            <Label className="underline" htmlFor="type-QR">QR</Label>
                         </div>
                         <div className="flex items-center space-x-4">
                             <RadioGroupItem value="cash" id="type-cash" />
-                            <Label htmlFor="type-cash">Cash</Label>
+                            <Label className="underline" htmlFor="type-cash">Cash</Label>
                         </div>
                     </RadioGroup>
 

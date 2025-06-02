@@ -4,16 +4,17 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation'; // Importa useParams per i client components
 import OrderCheckoutWrapper from '@/components/OrderCheckoutWrapper'; // Importa il nuovo client component
 
-// Definisci le tue interfacce esistenti: ProductInfo, OrderRow, CustomerInfo, Order, Category, Product
+// Definisci le tue interfacce esistenti: Product, OrderRow, CustomerInfo, Order, Category, Product
 type OrderRowStatus = 'pending' | 'served' | 'paid' | 'cancelled';
 
-interface ProductInfo {
+interface Product {
     id: number;
     documentId?: string; // Opzionale per consistenza con OrderRow
     name: string;
     price: number;
     vat?: number; // Aggiunto per consistenza con modale e calcoli
-    description?: string; // Aggiunto per consistenza
+    description?: string;
+    imageUrl?: string
 }
 
 interface OrderRow { // From page.tsx
@@ -25,9 +26,10 @@ interface OrderRow { // From page.tsx
     category_doc_id?: string; // Optional for consistency with OrderRow
     product_doc_id?: string; // Changed to productId for clarity
     order_doc_id?: string;
-    product?: ProductInfo;
+    product?: Product;
     createdAt: string;
-    orderRowStatus?: OrderRowStatus; // Added for clarity
+    orderRowStatus?: OrderRowStatus;
+    updatedAt: string // Added for clarity
 }
 
 interface CustomerInfo {
@@ -46,16 +48,6 @@ interface Order {
     createdAt: string;
     order_rows: OrderRow[];
 }
-
-interface Product {
-    id: number;
-    documentId?: string;
-    name: string;
-    price: number;
-    description?: string;
-    vat?: number;
-}
-
 
 /**
  * Recupera i dati dell'ordine e le relative righe d'ordine e dettagli del prodotto dall'API Strapi.
@@ -109,11 +101,11 @@ async function getOrderData(orderDocId: string): Promise<Order | null> {
             fetchedOrderRows = await Promise.all(orderRowsResponseData.data.map(async (item: any) => {
                 const rowAttributes = item; // Rimosso .attributes
 
-                let product: ProductInfo | undefined = undefined;
+                let product: Product | undefined = undefined;
                 if (rowAttributes.product_doc_id) {
                     try {
                         const productRes = await fetch(
-                            `${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/products/${rowAttributes.product_doc_id}`,
+                            `${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/products/${rowAttributes.product_doc_id}?populate=*`,
                             { cache: 'no-store' }
                         );
                         if (productRes.ok) {
@@ -126,6 +118,7 @@ async function getOrderData(orderDocId: string): Promise<Order | null> {
                                     price: productData.data.price,
                                     vat: productData.data.vat,
                                     description: productData.data.description,
+                                    imageUrl: productData.data.image?.formats?.thumbnail?.url
                                 };
 
 
@@ -140,7 +133,8 @@ async function getOrderData(orderDocId: string): Promise<Order | null> {
                                     category_doc_id: rowAttributes.category_doc_id, // Rimosso .data
                                     createdAt: rowAttributes.createdAt,
                                     orderRowStatus: rowAttributes.orderRowStatus,
-                                    product: product, // Aggiunto il prodotto recuperato
+                                    product: product, 
+                                    updatedAt: rowAttributes.updatedAt// Aggiunto il prodotto recuperato
 
                                 };
                                 return row;
