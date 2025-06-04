@@ -166,7 +166,7 @@ export default function HomePage() { // Rinominato in HomePage per chiarezza, il
           />
         </div>
         <div className="flex gap-x-2">
-          <Button asChild size="lg">
+          <Button asChild size="lg" className="px-2">
             <Link href="/new-order">New Order</Link>
           </Button>
           <LogoutButton /> {/* Bottone Logout */}
