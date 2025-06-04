@@ -131,15 +131,14 @@ const OrderRowDisplay: React.FC<OrderItemProps> = ({ row, showPaidSwitcher = fal
                             (@ €{row.product.price.toFixed(2)} each)
                         </span>
                     )}
-
                     {row.product?.imageUrl && (
-                        <div className='block mt-4'>
+                        <div className='flex md:block mt-2 md:mt-4'> {/* Aggiunto flex e justify-center per mobile, e margini */}
                             <Image
                                 src={`${process.env.NEXT_PUBLIC_STRAPI_URL}${row.product.imageUrl}`}
                                 alt={row.product.name || 'Product Image'}
-                                width={200}
-                                height={200}
-                                className='border rounded-md mx-4'
+                                width={100} // Larghezza di base più piccola per mobile
+                                height={100} // Altezza di base più piccola per mobile
+                                className='w-24 h-24 md:w-32 md:h-32 lg:w-48 lg:h-48 object-cover border rounded-md mx-0' // Controllo delle dimensioni e centraggio
                             />
                         </div>
                     )}
@@ -148,7 +147,7 @@ const OrderRowDisplay: React.FC<OrderItemProps> = ({ row, showPaidSwitcher = fal
                     {/* Only render if categoryName has a value */}
                     {categoryName && (
                         <div className="text-xs text-muted-foreground mt-2">
-                           <strong>Category: </strong> <span className='text-primary'> {categoryName}</span>
+                            <strong>Category: </strong> <span className='text-primary'> {categoryName}</span>
                         </div>
                     )}
                 </div>

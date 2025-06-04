@@ -14,9 +14,9 @@ interface ProductInfo {
     id: number;
     documentId?: string;
     name: string;
-    price: number;
+    price: number; // This price is now considered to INCLUDE VAT
     description?: string;
-    vat?: number;
+    vat?: number; // This should be the VAT rate (e.g., 22 for 22%, or 0.22 for 22%)
     categoryName?: string; // Add categoryName to ProductInfo
 }
 
@@ -31,8 +31,8 @@ interface OrderRow {
     id: number;
     documentId: string;
     quantity: number;
-    subtotal: number;
-    taxesSubtotal: number;
+    subtotal: number; // This subtotal will now include taxes
+    taxesSubtotal: number; // This will represent the calculated tax portion of the subtotal
     category_doc_id?: string;
     product_doc_id?: string;
     order_doc_id?: string;
@@ -71,7 +71,7 @@ async function fetchCategoryById(categoryDocId: string): Promise<Category | null
     }
 
     try {
-        console.log(`Workspaceing category for ID: ${categoryDocId}`);
+        console.log(`Fetching category for ID: ${categoryDocId}`);
         const res = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/categories/${categoryDocId}`);
 
         if (!res.ok) {
@@ -119,9 +119,9 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
 
 
     // Calculated totals in USD before custom discount
-    const [baseGrandTotalUSD, setBaseGrandTotalUSD] = useState<number>(0); // Renamed for clarity
-    const [calculatedTotalTaxesUSD, setCalculatedTotalTaxesUSD] = useState<number>(0);
-    const [calculatedTotalNoTaxesUSD, setCalculatedTotalNoTaxesUSD] = useState<number>(0);
+    const [baseGrandTotalUSD, setBaseGrandTotalUSD] = useState<number>(0); // This is the sum of subtotals (incl. taxes)
+    const [calculatedTotalTaxesUSD, setCalculatedTotalTaxesUSD] = useState<number>(0); // Total tax portion for transparency
+    const [calculatedTotalNoTaxesUSD, setCalculatedTotalNoTaxesUSD] = useState<number>(0); // Total non-tax portion for transparency
 
     // Processed order rows for display
     const [processedOrderRows, setProcessedOrderRows] = useState<OrderRow[]>([]);
@@ -130,7 +130,7 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
         setOrder(initialOrder);
     }, [initialOrder]);
 
-    // This function only applies the fixed and percentage discounts to individual row prices
+    // This function only applies the fixed and percentage discounts to individual row prices (which include taxes)
     const applyItemLevelDiscountsToPrice = useCallback(async (originalPrice: number, categoryDocId?: string): Promise<number> => {
         let currentPrice = originalPrice;
         let categoryName: string | undefined;
@@ -170,14 +170,14 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
         // Custom discount is NOT applied here anymore. It's applied to the grand total.
 
         return currentPrice;
-    }, [khmerCustomerDiscount, cbacMembersDiscount, kandalVillageFriendDiscount]); // Custom discount removed from dependencies
+    }, [khmerCustomerDiscount, cbacMembersDiscount, kandalVillageFriendDiscount]);
 
     useEffect(() => {
         const processOrderAndCalculateBaseTotals = async () => {
             const activeRows = order.order_rows.filter(row => row.orderRowStatus !== 'cancelled');
-            let tempBaseGrandTotal = 0; // This will be the grand total BEFORE custom discount
-            let tempTotalTaxes = 0;
-            let tempTotalNoTaxes = 0;
+            let tempBaseGrandTotal = 0; // Sum of subtotals (incl. taxes) before custom discount
+            let tempCalculatedTotalTaxes = 0; // Sum of tax portions for transparency
+            let tempCalculatedTotalNoTaxes = 0; // Sum of non-tax portions for transparency
             const newProcessedRows: OrderRow[] = [];
 
             for (const row of activeRows) {
@@ -185,30 +185,42 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
                 // Use the modified function that only applies item-level discounts
                 const discountedPricePerUnit = await applyItemLevelDiscountsToPrice(originalProductPrice, row.category_doc_id);
 
-                const newSubtotal = discountedPricePerUnit * row.quantity;
-                const newTaxesSubtotal = row.taxesSubtotal; // Assuming taxes don't change with these discounts
+                // Assuming `row.product?.vat` is the VAT percentage (e.g., 22 for 22%)
+                const vatRate = row.product?.vat && row.product.vat > 0 ? row.product.vat / 100 : 0;
 
-                tempBaseGrandTotal += newSubtotal + newTaxesSubtotal;
-                tempTotalTaxes += newTaxesSubtotal;
-                tempTotalNoTaxes += newSubtotal;
+                // The new subtotal is the discounted price per unit multiplied by quantity.
+                // This `newSubtotal` ALREADY INCLUDES TAXES, as per your requirement.
+                const newSubtotal = discountedPricePerUnit * row.quantity;
+
+                // Calculate the tax portion of this new subtotal for transparency
+                // If price includes VAT, then: price_excl_vat = price_incl_vat / (1 + vat_rate)
+                // VAT amount = price_incl_vat - price_excl_vat
+                const taxesForThisRow = vatRate > 0 ? (newSubtotal - (newSubtotal / (1 + vatRate))) : 0;
+                const priceWithoutTaxesForThisRow = newSubtotal - taxesForThisRow;
+
+
+                tempBaseGrandTotal += newSubtotal; // Sum of subtotals (already includes taxes)
+                tempCalculatedTotalTaxes += taxesForThisRow;
+                tempCalculatedTotalNoTaxes += priceWithoutTaxesForThisRow;
 
                 newProcessedRows.push({
                     ...row,
-                    subtotal: newSubtotal,
+                    subtotal: newSubtotal, // This subtotal now reflects the discounted price (incl. taxes)
+                    taxesSubtotal: taxesForThisRow, // This is the calculated tax portion of the new subtotal
                     product: row.product ? {
                         ...row.product,
-                        price: discountedPricePerUnit
+                        price: discountedPricePerUnit // This price per unit is now the discounted one (incl. taxes)
                     } : row.product
                 });
             }
             setBaseGrandTotalUSD(tempBaseGrandTotal);
-            setCalculatedTotalTaxesUSD(tempTotalTaxes);
-            setCalculatedTotalNoTaxesUSD(tempTotalNoTaxes);
+            setCalculatedTotalTaxesUSD(tempCalculatedTotalTaxes);
+            setCalculatedTotalNoTaxesUSD(tempCalculatedTotalNoTaxes);
             setProcessedOrderRows(newProcessedRows);
         };
 
         processOrderAndCalculateBaseTotals();
-    }, [order, khmerCustomerDiscount, cbacMembersDiscount, kandalVillageFriendDiscount, applyItemLevelDiscountsToPrice]); // Custom discount removed from dependencies
+    }, [order, khmerCustomerDiscount, cbacMembersDiscount, kandalVillageFriendDiscount, applyItemLevelDiscountsToPrice]);
 
     const activeOrderRowsCount = order.order_rows.filter(row => row.orderRowStatus !== 'cancelled').length;
 
@@ -258,7 +270,7 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
             });
         }
 
-         // --- Start of Modified Logic for appliedDiscount ---
+           // --- Start of Modified Logic for appliedDiscount ---
         const appliedDiscountsList: string[] = [];
         if (khmerCustomerDiscount) {
             appliedDiscountsList.push("Khmer Customer Discount (Beer prices adjusted)");
@@ -267,7 +279,7 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
             appliedDiscountsList.push("CBAC Members Discount (Beer: -$1 per item)");
         }
         if (kandalVillageFriendDiscount) {
-            appliedDiscountsList.push("Kandal Village Friend Discount (15% off order row)");
+            appliedDiscountsList.push("Kandal Village Friend Discount (15% off total order row)");
         }
         if (customDiscount.value > 0) {
             const customDiscountText = customDiscount.type === 'dollar'
@@ -279,7 +291,7 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
         const appliedDiscountString = appliedDiscountsList.length > 0
             ? appliedDiscountsList.join("; ")
             : "No discounts applied";
-      
+        
 
         const checkoutInfo = { 
             paymentMethod: paymentMethod,
@@ -327,7 +339,7 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
                         <Image src="/logo.png" alt="Logo" width={80} height={80} className="logo" priority />
                     </Link>
                 </div>
-                <Button className='bg-emerald-500 text-white' size="lg" onClick={() => setIsPaymentModalOpen(true)}>
+                <Button className='bg-emerald-500 text-white px-4' size="lg" onClick={() => setIsPaymentModalOpen(true)}>
                     Pay
                 </Button>
             </div>
@@ -449,39 +461,35 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
                 {activeOrderRowsCount > 0 && (
                     <div className="mt-8 pt-4 border-t border-border">
                         <div className="flex justify-between items-center text-lg font-semibold mb-2">
-                            <span>Subtotal (excluding taxes):</span>
+                            <span>Subtotal (Net Price):</span> {/* Display non-tax portion */}
                             <span>€{calculatedTotalNoTaxesUSD.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between items-center text-lg font-semibold mb-2">
-                            <span>Total Taxes:</span>
+                            <span>Total Taxes Included:</span> {/* Display tax portion */}
                             <span>€{calculatedTotalTaxesUSD.toFixed(2)}</span>
                         </div>
-                        {/* Base Grand Total USD before custom discount */}
-                        <div className="flex justify-between items-center text-md font-semibold mb-2 text-gray-500">
-                            <span>Base Grand Total (USD):</span>
-                            <span>€{baseGrandTotalUSD.toFixed(2)}</span>
-                        </div>
-
-                        <div className="flex justify-between items-center text-md mb-2">
-                            <span>Final Grand Total (USD):</span> {/* Renamed for clarity */}
+              
+                        {/* FINAL Grand Total (USD) */}
+                        <div className="flex justify-between items-center text-xl font-bold text-primary mb-2">
+                            <span>Final Total (USD):</span>
                             <span>€{finalGrandTotalUSD.toFixed(2)}</span>
                         </div>
 
                         {/* Refined Grand Total (USD) */}
                         <div className="flex justify-between items-center text-xl font-bold text-primary mb-2">
-                            <span>Refined Final Total (USD):</span> {/* Renamed for clarity */}
+                            <span>Refined Final Total (USD):</span>
                             <span>€{refinedGrandTotalUSD.toFixed(1)}</span>
                         </div>
 
                         {/* Grand Total in Riel */}
                         <div className="flex justify-between items-center text-md mb-2">
-                            <span>Final Grand Total (KHR):</span> {/* Renamed for clarity */}
+                            <span>Final Total (KHR):</span>
                             <span>៛{grandTotalRiel.toFixed(0)}</span>
                         </div>
 
                         {/* Refined Grand Total in Riel */}
                         <div className="flex justify-between items-center text-xl font-bold text-primary">
-                            <span>Refined Final Total (KHR):</span> {/* Renamed for clarity */}
+                            <span>Refined Final Total (KHR):</span>
                             <span>៛{refinedGrandTotalRiel.toFixed(0)}</span>
                         </div>
                     </div>

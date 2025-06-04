@@ -95,25 +95,30 @@ export default function ProductSelectionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
-      <div className="bg-card p-6 rounded-lg shadow-xl w-full max-w-3xl h-[80vh] flex flex-col text-foreground">
+      {/* Modifiche per mobile qui */}
+      <div className="bg-card p-4 rounded-lg shadow-xl w-[95%] max-w-lg h-[95vh] flex flex-col text-foreground
+                      md:p-6 md:max-w-3xl md:h-[80vh]">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-semibold text-primary">Order: {createdOrder?.id} - {createdOrder?.customerName}</h2>
+          {/* Modifiche per mobile qui */}
+          <h2 className="text-xl md:text-2xl font-semibold text-primary">Order: {createdOrder?.id} - {createdOrder?.customerName}</h2>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </Button>
         </div>
 
-        <div className="flex flex-1 overflow-hidden space-x-4">
+        {/* Modifiche per mobile qui */}
+        <div className="flex flex-1 overflow-hidden flex-col md:flex-row space-x-0 md:space-x-4">
           {/* Left Column: Categories */}
-          <div className="w-1/3 border-r border-border pr-4 overflow-y-auto">
-            <h3 className="text-lg font-medium mb-3 text-muted-foreground">Categories</h3>
+          {/* Modifiche per mobile qui */}
+          <div className="w-full h-1/2 md:h-auto md:w-1/3 border-b md:border-b-0 md:border-r border-border pb-4 md:pb-0 md:pr-4 overflow-y-auto">
+            <h3 className="lg:text-lg font-medium mb-3 text-muted-foreground">Categories</h3>
             {categories.length > 0 ? (
               <ul className="space-y-2">
                 {categories.map((category) => (
                   <li key={category.id}>
                     <Button
                       variant={selectedCategoryDocId === category.documentId ? "secondary" : "ghost"}
-                      className="w-full justify-start text-left"
+                      className="w-full justify-start text-left ps-2"
                       onClick={() => handleCategoryClick(category.documentId || '')} // Ensure documentId is a string
                     >
                       {category.name ?? 'Unnamed Category'}
@@ -127,8 +132,9 @@ export default function ProductSelectionModal({
           </div>
 
           {/* Right Column: Products */}
-          <div className="w-2/3 flex flex-col overflow-y-auto pl-4">
-            <h3 className="text-lg font-medium mb-3 text-muted-foreground">
+          {/* Modifiche per mobile qui */}
+          <div className="w-full h-1/2 md:h-auto md:w-2/3 flex flex-col overflow-y-auto pt-4 md:pt-0 md:pl-4">
+            <h3 className="lg:text-lg font-medium mb-3 text-muted-foreground">
               Products {selectedCategoryDocId && categories.find(c => c.documentId === selectedCategoryDocId)?.name ? `in ${categories.find(c => c.documentId === selectedCategoryDocId)?.name ?? 'Selected Category'}` : ''}
             </h3>
             {selectedCategoryDocId ? (
@@ -138,14 +144,14 @@ export default function ProductSelectionModal({
                     <li key={product.id}>
                       <Button
                         variant={selectedProductInModal?.documentId === product.documentId ? "outline" : "ghost"}
-                        className="w-full justify-between text-left p-3 h-auto"
+                        className="w-full text-left p-3 h-auto"
                         onClick={() => handleProductSelect(product)}
                       >
-                        <div>
-                          <span className="font-medium">{product.name ?? 'Unnamed Product'}</span>
-                          {product.description && <p className="text-xs text-muted-foreground">{product.description}</p>}
+                        <div className='w-3/4'>
+                          <p className="font-medium truncate">{product.name ?? 'Unnamed Product'}</p>
+                          {product.description && <p className="text-xs text-muted-foreground truncate">{product.description}</p>}
                         </div>
-                        <span className="text-sm font-semibold">
+                        <span className="text-sm font-semibold w-1/4 text-end">
                           {product.price != undefined ? `€${product.price.toFixed(2)}` : 'Price N/A'}
                         </span>
                       </Button>
@@ -163,7 +169,7 @@ export default function ProductSelectionModal({
 
         {/* Modal Footer: Quantity and Add Button */}
         {selectedProductInModal?.name && ( // Check for product name (implies product is selected)
-          <div className="mt-6 pt-4 border-t border-border flex items-center justify-between space-x-4">
+          <div className="mt-6 pt-4 border-t border-border flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0 md:space-x-4">
             <div className='flex items-center space-x-2'>
               <label htmlFor="quantity" className="text-sm font-medium text-muted-foreground">Quantity:</label>
               <input
@@ -173,10 +179,11 @@ export default function ProductSelectionModal({
                 min="1"
                 value={selectedQuantity}
                 onChange={(e) => setSelectedQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-20 p-2 border border-input rounded-md text-sm bg-transparent focus:ring-primary focus:border-primary"
+                className="w-20 p-2 border border-input rounded-md text-sm bg-transparent focus:ring-primary focus:border-primary text-end md:text-start"
               />
             </div>
-            <Button onClick={handleConfirmAddProduct} size="lg">
+            {/* Modifiche per mobile qui */}
+            <Button onClick={handleConfirmAddProduct} size="lg" className="w-full md:w-auto">
               Add {selectedQuantity} x {selectedProductInModal.name} to Order
             </Button>
           </div>

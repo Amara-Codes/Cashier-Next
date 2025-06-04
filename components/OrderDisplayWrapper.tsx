@@ -240,17 +240,17 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
                     <div className='flex gap-x-2'>
 
                         {isCheckoutDisabled ? (
-                            <Button className='bg-emerald-500 text-white' size="lg" disabled>
+                            <Button className='bg-emerald-500 text-white px-2' size="lg" disabled>
                                 Checkout
                             </Button>
                         ) : (
                             <Link href={`/checkout/${initialOrder.documentId}`} passHref>
-                                <Button className='bg-emerald-500 text-white' size="lg">
+                                <Button className='bg-emerald-500 text-white px-2' size="lg">
                                     Checkout
                                 </Button>
                             </Link>
                         )}
-                        <Button onClick={handleOpenModal} size="lg">
+                        <Button onClick={handleOpenModal} className="px-2" size="lg">
                             Add Product to Order
                         </Button>
                     </div>
