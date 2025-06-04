@@ -1,7 +1,12 @@
 // File: /app/page.tsx
+'use client'; // <-- QUESTO È ESSENZIALE PER ACCEDERE A localStorage E USARE GLI HOOKS
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import { useRouter } from 'next/navigation'; // Per reindirizzare
+import { LogoutButton } from '@/components/LogoutButton'; // Assicurati che questo file esista
 
 // Define interfaces for your data structures, consistent with OrderDisplayWrapper.tsx
 interface OrderRow {
@@ -28,79 +33,128 @@ interface Order {
   order_rows: OrderRow[];
 }
 
-export default async function Home() {
+export default function HomePage() { // Rinominato in HomePage per chiarezza, il nome del file 'page.tsx' è ciò che conta
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [orders, setOrders] = useState<Order[]>([]); // Stato per tutti gli ordini fetched
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
   const STRAPI_URL = process.env.NEXT_PUBLIC_STRAPI_URL;
 
-  let servedOrders: Order[] = [];
-  let pendingOrders: Order[] = [];
-  let todayPaidOrders: Order[] = []; // New array for today's paid orders
+  useEffect(() => {
+    const checkAuthAndFetchOrders = async () => {
+      setIsLoading(true);
+      const jwt = localStorage.getItem('jwt'); // Recupera il JWT dal localStorage
 
-  try {
-    const response = await fetch(`${STRAPI_URL}/api/orders`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      cache: 'no-store', // Ensure fresh data
-    });
+      if (!jwt) {
+        setIsAuthenticated(false);
+        setIsLoading(false);
+        return; // Non autenticato, ferma qui
+      }
 
-    if (!response.ok) {
-      console.error(`Failed to fetch orders: ${response.status} ${response.statusText}`);
-      const errorData = await response.json();
-      console.error('Error details:', errorData);
-      servedOrders = [];
-      pendingOrders = [];
-      todayPaidOrders = [];
-    } else {
-      const { data } = await response.json();
-      const allOrders: Order[] = data.map((item: any) => ({
-        id: item.id,
-        documentId: item.documentId,
-        orderStatus: item.orderStatus,
-        tableName: item.tableName,
-        customerName: item.customerName,
-        createdAt: item.createdAt,
-        paymentDaytime: item.paymentDaytime, // Map the paymentDaytime field
-        order_rows: item.order_rows?.data ? item.order_rows.data.map((row: any) => ({
-          id: row.id,
-          documentId: row.documentId,
-          quantity: row.quantity,
-          subtotal: row.subtotal,
-          taxesSubtotal: row.taxesSubtotal,
-          orderRowStatus: row.orderRowStatus,
-          createdAt: row.createdAt,
-          category_doc_id: row.category_doc_id,
-          product_doc_id: row.product_doc_id,
-          order_doc_id: row.order_doc_id,
-        })) : [],
-      }));
+      setIsAuthenticated(true); // JWT trovato, proviamo a fetchare i dati
 
-      const today = new Date();
-      // Set hours, minutes, seconds, and milliseconds to 0 for accurate date comparison
-      today.setHours(0, 0, 0, 0);
+      try {
+        const response = await fetch(`${STRAPI_URL}/api/orders`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${jwt}`, // Includi il JWT qui
+          },
+          cache: 'no-store', // Assicurati dati freschi
+        });
 
-      servedOrders = allOrders.filter(order => order.orderStatus === 'served');
-      pendingOrders = allOrders.filter(order => order.orderStatus === 'pending');
-
-      todayPaidOrders = allOrders.filter(order => {
-        if (order.orderStatus === 'paid' && order.paymentDaytime) {
-          const paymentDate = new Date(order.paymentDaytime);
-          paymentDate.setHours(0, 0, 0, 0); // Normalize to start of day
-          return paymentDate.getTime() === today.getTime();
+        if (!response.ok) {
+          // Se non autorizzato (es. JWT scaduto o invalido), reindirizza al login
+          if (response.status === 401 || response.status === 403) {
+            localStorage.removeItem('jwt'); // Rimuovi il JWT non valido
+            setIsAuthenticated(false); // Imposta come non autenticato
+            setFetchError("Sessione scaduta o non autorizzata. Effettua nuovamente il login.");
+          } else {
+            const errorData = await response.json();
+            console.error(`Failed to fetch orders: ${response.status} ${response.statusText}`, errorData);
+            setFetchError(errorData.error?.message || `Errore nel recupero degli ordini: ${response.status}`);
+          }
+          setOrders([]); // Pulisci gli ordini in caso di errore
+        } else {
+          const { data } = await response.json();
+          const allOrders: Order[] = data.map((item: any) => ({
+            id: item.id,
+            documentId: item.documentId,
+            orderStatus: item.orderStatus,
+            tableName: item.tableName,
+            customerName: item.customerName,
+            createdAt: item.createdAt,
+            paymentDaytime: item.paymentDaytime,
+            order_rows: item.order_rows?.data ? item.order_rows.data.map((row: any) => ({
+              id: row.id,
+              documentId: row.documentId,
+              quantity: row.quantity,
+              subtotal: row.subtotal,
+              taxesSubtotal: row.taxesSubtotal,
+              orderRowStatus: row.orderRowStatus,
+              createdAt: row.createdAt,
+              category_doc_id: row.category_doc_id,
+              product_doc_id: row.product_doc_id,
+              order_doc_id: row.order_doc_id,
+            })) : [],
+          }));
+          setOrders(allOrders);
         }
-        return false;
-      });
+      } catch (error) {
+        console.error("Error fetching orders:", error);
+        setFetchError("Errore di rete o server non disponibile.");
+        setOrders([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkAuthAndFetchOrders();
+  }, []); // Esegui solo una volta al mount del componente
+
+  // Filtra gli ordini dopo che sono stati fetched e sono nello stato 'orders'
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); // Normalizza la data di oggi a mezzanotte
+
+  const servedOrders = orders.filter(order => order.orderStatus === 'served');
+  const pendingOrders = orders.filter(order => order.orderStatus === 'pending');
+  const todayPaidOrders = orders.filter(order => {
+    if (order.orderStatus === 'paid' && order.paymentDaytime) {
+      const paymentDate = new Date(order.paymentDaytime);
+      paymentDate.setHours(0, 0, 0, 0); // Normalizza la data di pagamento a mezzanotte
+      return paymentDate.getTime() === today.getTime();
     }
-  } catch (error) {
-    console.error("Error fetching orders:", error);
-    servedOrders = [];
-    pendingOrders = [];
-    todayPaidOrders = [];
+    return false;
+  });
+
+  if (isLoading) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground">
+        <p className="text-xl">Caricamento ordini...</p>
+        {/* Puoi aggiungere uno spinner o un'icona di caricamento qui */}
+      </main>
+    );
   }
 
+  if (!isAuthenticated) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-background text-foreground text-center">
+        <h1 className="text-3xl sm:text-4xl font-bold mb-6 text-primary">Access Required</h1>
+        {fetchError && <p className="text-red-500 mb-4">{fetchError}</p>}
+        <p className="text-lg text-gray-700 mb-8">You must be logged in to view the orders.</p>
+        <Button asChild size="lg">
+          <Link href="/login">Login</Link>
+        </Button>
+      </main>
+    );
+  }
+
+  // Questo è il contenuto che viene mostrato SOLO se isAuthenticated è true
   return (
     <main className="flex min-h-screen flex-col items-center px-4 sm:px-8 md:px-24 py-8 bg-background text-foreground">
-      <div className='flex justify-between items-center w-full max-w-5xl mt-8 mb-6'>
+      <div className='flex items-center justify-between w-full max-w-6xl mt-8 mb-6'>
         <div className="logo-container">
           <Image
             src="/logo.png"
@@ -111,12 +165,24 @@ export default async function Home() {
             priority
           />
         </div>
-        <Button asChild size="lg">
-          <Link href="/new-order">New Order</Link>
-        </Button>
+        <div className="flex gap-x-2">
+          <Button asChild size="lg">
+            <Link href="/new-order">New Order</Link>
+          </Button>
+          <LogoutButton /> {/* Bottone Logout */}
+        </div>
       </div>
 
       <h1 className="text-3xl sm:text-4xl font-bold mb-8 text-primary">Current Orders</h1>
+
+      {/* Mostra errori di fetch anche se l'utente è autenticato (es. token scaduto dopo un po') */}
+      {fetchError && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-6 w-full max-w-6xl" role="alert">
+          <strong className="font-bold">Loading Error: </strong>
+          <span className="block sm:inline">{fetchError}</span>
+          <p className="text-sm mt-2">Please, try reloading the page or logging in again.</p>
+        </div>
+      )}
 
       <div className="flex w-full max-w-6xl gap-8 flex-col md:flex-row">
         {/* Pending Orders Section */}
@@ -162,8 +228,6 @@ export default async function Home() {
           )}
         </div>
       </div>
-
-  
 
       {/* Today's Paid Orders Section */}
       <div className="w-full max-w-6xl mt-8 p-4 bg-card rounded-lg shadow-md">

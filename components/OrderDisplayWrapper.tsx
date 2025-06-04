@@ -230,7 +230,7 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
     return (
 
         <main className="flex min-h-screen flex-col items-center px-4 sm:px-8 md:px-24 py-8 bg-background text-foreground">
-            <div className='flex items-center justify-between w-full max-w-5xl mt-8 mb-6'>
+            <div className='flex items-center justify-between w-full max-w-6xl mt-8 mb-6'>
                 <div className="logo-container">
                     <Link href="/" passHref>
                         <Image src="/logo.png" alt="Logo" width={80} height={80} className="logo" priority />
@@ -267,7 +267,7 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
                 </h1>
             </div>
 
-            <div className="w-full max-w-5xl mt-4">
+            <div className="w-full max-w-6xl mt-4">
                 <h2 className="text-2xl font-semibold mb-3">Order Details:</h2>
                 <p><strong>Status:</strong>
                     <span
