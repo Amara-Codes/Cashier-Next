@@ -1,95 +1,130 @@
 // File: /app/page.tsx
-'use client'; // <-- QUESTO È ESSENZIALE PER ACCEDERE A localStorage E USARE GLI HOOKS
+'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { useRouter } from 'next/navigation'; // Per reindirizzare
+import { useRouter } from 'next/navigation';
 import { LogoutButton } from '@/components/LogoutButton';
-import { Order } from "@/types";  // Assicurati che questo file esista
+import { Order } from "@/types";
 
-export default function HomePage() { // Rinominato in HomePage per chiarezza, il nome del file 'page.tsx' è ciò che conta
+export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [orders, setOrders] = useState<Order[]>([]); // Stato per tutti gli ordini fetched
+  const [orders, setOrders] = useState<Order[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [userName, setUserName] = useState('')
+  const [userName, setUserName] = useState('');
 
   const STRAPI_URL = process.env.NEXT_PUBLIC_STRAPI_URL;
 
-  useEffect(() => {
-    const checkAuthAndFetchOrders = async () => {
-      setIsLoading(true);
-      const jwt = localStorage.getItem('jwt'); // Recupera il JWT dal localStorage
+  // Questa funzione fetcherà gli ordini.
+  // Resa useCallback per ottimizzazione e per essere usata nell'intervallo.
+  const fetchOrders = useCallback(async () => {
+    // Non impostiamo isLoading a true qui, per evitare che l'interfaccia "lampeggi"
+    // ad ogni refresh automatico. isLoading verrà gestito solo al primo caricamento.
+    const jwt = localStorage.getItem('jwt');
 
-      setUserName(localStorage.getItem('username') ?? 'Unidentified User')
-      if (!jwt) {
-        setIsAuthenticated(false);
-        setIsLoading(false);
-        return; // Non autenticato, ferma qui
-      }
+    setUserName(localStorage.getItem('username') ?? 'Unidentified User');
 
-      setIsAuthenticated(true); // JWT trovato, proviamo a fetchare i dati
+    if (!jwt) {
+      setIsAuthenticated(false);
+      setIsLoading(false); // Imposta a false solo se non autenticato all'inizio
+      return;
+    }
 
-      try {
-        const response = await fetch(`${STRAPI_URL}/api/orders`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${jwt}`, // Includi il JWT qui
-          },
-          cache: 'no-store', // Assicurati dati freschi
-        });
+    setIsAuthenticated(true); // Se c'è JWT, consideriamo autenticato per provare il fetch
 
-        if (!response.ok) {
-          // Se non autorizzato (es. JWT scaduto o invalido), reindirizza al login
-          if (response.status === 401 || response.status === 403) {
-            localStorage.removeItem('jwt'); // Rimuovi il JWT non valido
-            setIsAuthenticated(false); // Imposta come non autenticato
-            setFetchError("Sessione scaduta o non autorizzata. Effettua nuovamente il login.");
-          } else {
-            const errorData = await response.json();
-            console.error(`Failed to fetch orders: ${response.status} ${response.statusText}`, errorData);
-            setFetchError(errorData.error?.message || `Errore nel recupero degli ordini: ${response.status}`);
-          }
-          setOrders([]); // Pulisci gli ordini in caso di errore
+    try {
+      const response = await fetch(`${STRAPI_URL}/api/orders`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${jwt}`,
+        },
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          localStorage.removeItem('jwt');
+          setIsAuthenticated(false);
+          setFetchError("Sessione scaduta o non autorizzata. Effettua nuovamente il login.");
         } else {
-          const { data } = await response.json();
-          const allOrders: Order[] = data.map((item: any) => ({
-            id: item.id,
-            documentId: item.documentId,
-            orderStatus: item.orderStatus,
-            tableName: item.tableName,
-            customerName: item.customerName,
-            createdAt: item.createdAt,
-            paymentDaytime: item.paymentDaytime,
-            order_rows: item.order_rows?.data ? item.order_rows.data.map((row: any) => ({
-              id: row.id,
-              documentId: row.documentId,
-              quantity: row.quantity,
-              subtotal: row.subtotal,
-              taxesSubtotal: row.taxesSubtotal,
-              orderRowStatus: row.orderRowStatus,
-              createdAt: row.createdAt,
-              category_doc_id: row.category_doc_id,
-              product_doc_id: row.product_doc_id,
-              order_doc_id: row.order_doc_id,
-            })) : [],
-          }));
-          setOrders(allOrders);
+          const errorData = await response.json();
+          console.error(`Failed to fetch orders: ${response.status} ${response.statusText}`, errorData);
+          setFetchError(errorData.error?.message || `Errore nel recupero degli ordini: ${response.status}`);
         }
-      } catch (error) {
-        console.error("Error fetching orders:", error);
-        setFetchError("Errore di rete o server non disponibile.");
         setOrders([]);
-      } finally {
-        setIsLoading(false);
+      } else {
+        const { data } = await response.json();
+        const allOrders: Order[] = data.map((item: any) => ({
+          id: item.id,
+          documentId: item.documentId,
+          orderStatus: item.orderStatus,
+          tableName: item.tableName,
+          customerName: item.customerName,
+          createdAt: item.createdAt,
+          paymentDaytime: item.paymentDaytime,
+          order_rows: item.order_rows?.data ? item.order_rows.data.map((row: any) => ({
+            id: row.id,
+            documentId: row.documentId,
+            quantity: row.quantity,
+            subtotal: row.subtotal,
+            taxesSubtotal: row.taxesSubtotal,
+            orderRowStatus: row.orderRowStatus,
+            createdAt: row.createdAt,
+            category_doc_id: row.category_doc_id,
+            product_doc_id: row.product_doc_id,
+            order_doc_id: row.order_doc_id,
+          })) : [],
+        }));
+        setOrders(allOrders);
+        setFetchError(null); // Resetta l'errore se il fetch ha successo
       }
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      setFetchError("Errore di rete o server non disponibile.");
+      setOrders([]);
+    } finally {
+      // Imposta isLoading a false solo dopo il primo fetch riuscito o fallito
+      // Se l'utente non è autenticato, isLoading è già false da prima del fetch.
+      if (isAuthenticated) { // Assicurati di non cambiare isLoading se l'utente è stato deautenticato
+         setIsLoading(false);
+      }
+    }
+  }, [STRAPI_URL, isAuthenticated]); // Aggiunto isAuthenticated come dipendenza
+
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    // Funzione per il primo caricamento e per l'intervallo
+    const initialAndIntervalFetch = async () => {
+      // Solo per il primo caricamento, mostra lo spinner di caricamento
+      // Dopo il primo fetch, isLoading non verrà più impostato a true dall'intervallo
+      if (orders.length === 0 && !fetchError) { // Se non ci sono ordini e nessun errore iniziale
+        setIsLoading(true);
+      }
+      await fetchOrders(); // Esegui la funzione di fetch
+      setIsLoading(false); // Assicurati che isLoading sia false dopo il primo fetch
     };
 
-    checkAuthAndFetchOrders();
-  }, []); // Esegui solo una volta al mount del componente
+    initialAndIntervalFetch(); // Esegui subito al mount del componente
+
+    // Imposta l'intervallo per i fetch successivi
+    intervalId = setInterval(() => {
+      console.log('Fetching orders...'); // Per vedere in console che sta riprovando
+      fetchOrders();
+    }, 5000); // Ogni 5 secondi
+
+    // Cleanup: importante per prevenire memory leak e chiamate dopo l'unmount
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [fetchOrders, fetchError, orders.length]); // Aggiunte dipendenze per l'initial fetch
+                                               // fetchError e orders.length per gestire meglio isLoading
 
   // Filtra gli ordini dopo che sono stati fetched e sono nello stato 'orders'
   const today = new Date();
@@ -108,7 +143,7 @@ export default function HomePage() { // Rinominato in HomePage per chiarezza, il
 
   const formatMinutes = (minutes: number): string => {
     return minutes < 10 ? `0${minutes}` : minutes.toString();
-};
+  };
 
   if (isLoading) {
     return (
