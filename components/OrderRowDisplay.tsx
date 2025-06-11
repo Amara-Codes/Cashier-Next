@@ -4,39 +4,9 @@ import OrderRowStatusSwitcher from '@/components/OrderRowStatusSwitcher';
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 
-type OrderRowStatus = 'pending' | 'served' | 'paid' | 'cancelled';
+import { Category, OrderRow  } from '@/types';
 
-interface Category {
-    id: number;
-    documentId?: string; // Optional for consistency with OrderRow
-    name: string;
-    products?: Product[];
-}
 
-interface Product {
-    id: number;
-    documentId?: string; // Optional for consistency with OrderRow
-    name: string;
-    price: number;
-    description?: string;
-    vat?: number;
-    imageUrl?: string
-}
-
-interface OrderRow {
-    id: number;
-    documentId: string;
-    quantity: number;
-    subtotal: number;
-    taxesSubtotal: number;
-    product_doc_id?: string;
-    order_doc_id?: string;
-    category_doc_id?: string;
-    product?: Product;
-    createdAt: string;
-    orderRowStatus?: OrderRowStatus;
-    updatedAt: string
-}
 
 interface OrderItemProps {
     row: OrderRow;

@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
-import clsx from 'clsx'; // For conditional class names
-// Assuming you have react-icons installed
-
-// Define the possible statuses
-type OrderRowStatus = 'pending' | 'served' | 'paid' | 'cancelled';
+import clsx from 'clsx'; 
+type OrderRowStatus = 'pending' | 'served' | 'paid' | 'cancelled' | 'merged';
 
 // Props interface for the component
 interface OrderRowStatusSwitchProps {
@@ -65,7 +62,7 @@ const OrderRowStatusSwitcher: React.FC<OrderRowStatusSwitchProps> = ({
                     'Content-Type': 'application/json',
                     // Add authorization header if needed, e.g., 'Authorization': `Bearer ${yourAuthToken}`
                 },
-                body: JSON.stringify({ data: { orderRowStatus: newStatus } }), // Strapi expects 'data' wrapper for updates
+                body: JSON.stringify({ data: { orderRowStatus: newStatus, updatedByUserName: localStorage.getItem('username') ?? 'Unidentified User' } }), // Strapi expects 'data' wrapper for updates
             });
 
             if (!response.ok) {

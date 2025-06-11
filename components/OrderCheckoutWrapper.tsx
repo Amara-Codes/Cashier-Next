@@ -1,59 +1,22 @@
+// components/OrderCheckoutWrapper.tsx
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Image from "next/image";
 import Link from "next/link";
 import OrderRowDisplay from '@/components/OrderRowDisplay'; // Adjust path as necessary
 import { Button } from "@/components/ui/button";
 import { CustomDiscountModal } from '@/components/CustomDiscountModal';
 import { PaymentModal } from '@/components/PaymentModal'; // Import the new modal component
+import MergeOrderModal from '@/components/MergeOrderModal'; // Import the MergeOrderModal
 
-type OrderRowStatus = 'pending' | 'served' | 'paid' | 'cancelled';
-
-interface ProductInfo {
-    id: number;
-    documentId?: string;
-    name: string;
-    price: number; // This price is now considered to INCLUDE VAT
-    description?: string;
-    vat?: number; // This should be the VAT rate (e.g., 22 for 22%, or 0.22 for 22%)
-    categoryName?: string; // Add categoryName to ProductInfo
-}
-
-interface Category {
-    id: number;
-    documentId?: string;
-    name: string;
-    products?: ProductInfo[];
-}
-
-interface OrderRow {
-    id: number;
-    documentId: string;
-    quantity: number;
-    subtotal: number; // This subtotal will now include taxes
-    taxesSubtotal: number; // This will represent the calculated tax portion of the subtotal
-    category_doc_id?: string;
-    product_doc_id?: string;
-    order_doc_id?: string;
-    product?: ProductInfo;
-    createdAt: string;
-    orderRowStatus?: OrderRowStatus;
-    updatedAt: string
-}
-
-interface Order {
-    id: number;
-    documentId?: string;
-    orderStatus?: string;
-    tableName?: string;
-    customerName?: string;
-    createdAt: string;
-    order_rows: OrderRow[];
-}
+// Import interfaces from the centralized types file
+import { Order, OrderRow, Product, Category } from '@/types';
 
 interface OrderCheckoutWrapperProps {
     initialOrder: Order;
+    // Callback to signal OrderDetailPage that a merge occurred, prompting a full re-fetch
+    onOrderMerged: (sourceOrderId: number, sourceOrderDocId: string) => void;
 }
 
 // Map to cache fetched category names to avoid redundant API calls
@@ -105,8 +68,10 @@ async function fetchCategoryById(categoryDocId: string): Promise<Category | null
 
 const RIEL_EXCHANGE_RATE = 4000; // 1 USD = 4000 Riel
 
-export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrapperProps) {
+export default function OrderCheckoutWrapper({ initialOrder, onOrderMerged }: OrderCheckoutWrapperProps) {
     const [order, setOrder] = useState<Order>(initialOrder);
+    const [loading, setLoading] = useState<boolean>(false); // Initialize as false, as initialOrder is already loaded
+    const [error, setError] = useState<string | null>(null);
     const [khmerCustomerDiscount, setKhmerCustomerDiscount] = useState<boolean>(false);
     const [cbacMembersDiscount, setCbacMembersDiscount] = useState<boolean>(false);
     const [kandalVillageFriendDiscount, setKandalVillageFriendDiscount] = useState<boolean>(false);
@@ -114,9 +79,7 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
     // New state for custom discount
     const [isCustomDiscountModalOpen, setIsCustomDiscountModalOpen] = useState<boolean>(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
-    // Custom discount is now applied to the grand total, so its value doesn't affect `applyDiscountsToRow`'s dependencies directly
     const [customDiscount, setCustomDiscount] = useState<{ value: number; type: 'dollar' | 'percentage' }>({ value: 0, type: 'dollar' });
-
 
     // Calculated totals in USD before custom discount
     const [baseGrandTotalUSD, setBaseGrandTotalUSD] = useState<number>(0); // This is the sum of subtotals (incl. taxes)
@@ -126,11 +89,17 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
     // Processed order rows for display
     const [processedOrderRows, setProcessedOrderRows] = useState<OrderRow[]>([]);
 
+    const [isMergeModalOpen, setIsMergeModalOpen] = useState<boolean>(false);
+    const [userName, setUserName] = useState('')
+    // The mergedFromOrderDetails will now be part of the 'order' state itself,
+    // so we don't need a separate state here unless we want to cache it.
+    // For now, we'll rely on `order.mergedFromOrderId` and `order.mergedFromOrderDocId`.
+
     useEffect(() => {
+        setUserName(localStorage.getItem('username') ?? 'Unidentified User');
         setOrder(initialOrder);
     }, [initialOrder]);
 
-    // This function only applies the fixed and percentage discounts to individual row prices (which include taxes)
     const applyItemLevelDiscountsToPrice = useCallback(async (originalPrice: number, categoryDocId?: string): Promise<number> => {
         let currentPrice = originalPrice;
         let categoryName: string | undefined;
@@ -167,11 +136,10 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
             currentPrice = currentPrice * 0.85;
         }
 
-        // Custom discount is NOT applied here anymore. It's applied to the grand total.
-
         return currentPrice;
     }, [khmerCustomerDiscount, cbacMembersDiscount, kandalVillageFriendDiscount]);
 
+    // This useEffect recalculates totals and processes rows whenever relevant state changes
     useEffect(() => {
         const processOrderAndCalculateBaseTotals = async () => {
             const activeRows = order.order_rows.filter(row => row.orderRowStatus !== 'cancelled');
@@ -182,22 +150,11 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
 
             for (const row of activeRows) {
                 const originalProductPrice = row.product?.price || 0;
-                // Use the modified function that only applies item-level discounts
                 const discountedPricePerUnit = await applyItemLevelDiscountsToPrice(originalProductPrice, row.category_doc_id);
-
-                // Assuming `row.product?.vat` is the VAT percentage (e.g., 22 for 22%)
                 const vatRate = row.product?.vat && row.product.vat > 0 ? row.product.vat / 100 : 0;
-
-                // The new subtotal is the discounted price per unit multiplied by quantity.
-                // This `newSubtotal` ALREADY INCLUDES TAXES, as per your requirement.
                 const newSubtotal = discountedPricePerUnit * row.quantity;
-
-                // Calculate the tax portion of this new subtotal for transparency
-                // If price includes VAT, then: price_excl_vat = price_incl_vat / (1 + vat_rate)
-                // VAT amount = price_incl_vat - price_excl_vat
                 const taxesForThisRow = vatRate > 0 ? (newSubtotal - (newSubtotal / (1 + vatRate))) : 0;
                 const priceWithoutTaxesForThisRow = newSubtotal - taxesForThisRow;
-
 
                 tempBaseGrandTotal += newSubtotal; // Sum of subtotals (already includes taxes)
                 tempCalculatedTotalTaxes += taxesForThisRow;
@@ -217,12 +174,14 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
             setCalculatedTotalTaxesUSD(tempCalculatedTotalTaxes);
             setCalculatedTotalNoTaxesUSD(tempCalculatedTotalNoTaxes);
             setProcessedOrderRows(newProcessedRows);
+            setLoading(false); // Finished initial processing
         };
 
         processOrderAndCalculateBaseTotals();
     }, [order, khmerCustomerDiscount, cbacMembersDiscount, kandalVillageFriendDiscount, applyItemLevelDiscountsToPrice]);
 
-    const activeOrderRowsCount = order.order_rows.filter(row => row.orderRowStatus !== 'cancelled').length;
+    const activeOrderRowsCount = processedOrderRows.filter(row => row.orderRowStatus !== 'cancelled').length;
+
 
     // --- Apply Custom Discount to the final Grand Total ---
     let finalGrandTotalUSD = baseGrandTotalUSD;
@@ -233,7 +192,6 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
             finalGrandTotalUSD = baseGrandTotalUSD * (1 - (customDiscount.value / 100));
         }
     }
-    // --- End Custom Discount Application ---
 
     const refinedGrandTotalUSD = Math.ceil(finalGrandTotalUSD * 10) / 10; // Round up to one decimal place
     const grandTotalRiel = finalGrandTotalUSD * RIEL_EXCHANGE_RATE;
@@ -241,95 +199,241 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
 
     const handleApplyCustomDiscount = (value: number, type: 'dollar' | 'percentage') => {
         setCustomDiscount({ value, type });
-        // No need to explicitly trigger recalculation here as customDiscount is now a dependency
-        // in the main useEffect that calculates finalGrandTotalUSD
     };
 
-    const handlePayment = (totalAmount: number | string, paymentMethod: 'QR' | 'cash') => {
-        if (processedOrderRows.length) {
-            processedOrderRows.forEach(row => {
-                fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/order-rows/${row.documentId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ data: { orderRowStatus: 'paid' } }),
-                })
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error(`Failed to update order row ${row.documentId}`);
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        console.log(`Order row ${row.documentId} updated to paid:`, data);
-                    })
-                    .catch(error => {
-                        console.error(`Error updating order row ${row.documentId}:`, error);
-                    });
-            });
-        }
+    const handlePayment = useCallback(async (totalAmount: number | string, paymentMethod: 'QR' | 'cash') => {
+        setLoading(true);
+        setError(null);
 
-           // --- Start of Modified Logic for appliedDiscount ---
-        const appliedDiscountsList: string[] = [];
-        if (khmerCustomerDiscount) {
-            appliedDiscountsList.push("Khmer Customer Discount (Beer prices adjusted)");
-        }
-        if (cbacMembersDiscount) {
-            appliedDiscountsList.push("CBAC Members Discount (Beer: -$1 per item)");
-        }
-        if (kandalVillageFriendDiscount) {
-            appliedDiscountsList.push("Kandal Village Friend Discount (15% off total order row)");
-        }
-        if (customDiscount.value > 0) {
-            const customDiscountText = customDiscount.type === 'dollar'
-                ? `Custom Discount: -$${customDiscount.value.toFixed(2)}`
-                : `Custom Discount: ${customDiscount.value.toFixed(1)}% off`;
-            appliedDiscountsList.push(customDiscountText);
-        }
-
-        const appliedDiscountString = appliedDiscountsList.length > 0
-            ? appliedDiscountsList.join("; ")
-            : "No discounts applied";
-        
-
-        const checkoutInfo = { 
-            paymentMethod: paymentMethod,
-            paidAmount: totalAmount,
-            paymentDaytime: new Date().toISOString(),
-            appliedDiscount: appliedDiscountString,
-            orderStatus: 'paid',
-        }
-        fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/orders/${order.documentId}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ data: checkoutInfo }),
-        }).then(response => {
-            if (!response.ok) {
-                throw new Error(`Failed to update order ${order.documentId}`);
+        try {
+            // Update the main order's status to 'paid' and add checkout info
+            const appliedDiscountsList: string[] = [];
+            if (khmerCustomerDiscount) { appliedDiscountsList.push("Khmer Customer Discount (Beer prices adjusted)"); }
+            if (cbacMembersDiscount) { appliedDiscountsList.push("CBAC Members Discount (Beer: -$1 per item)"); }
+            if (kandalVillageFriendDiscount) { appliedDiscountsList.push("Kandal Village Friend (15% off total order row)"); }
+            if (customDiscount.value > 0) {
+                const customDiscountText = customDiscount.type === 'dollar'
+                    ? `Custom Discount: -$${customDiscount.value.toFixed(2)}`
+                    : `Custom Discount: ${customDiscount.value.toFixed(1)}% off`;
+                appliedDiscountsList.push(customDiscountText);
             }
-            return response.json();
-        })
-            .then(data => {
-                console.log(`Order ${order.documentId} updated to paid:`, data);
-                window.location.href = '/'; // Redirect to home after payment
-            })
-            .catch(error => {
-                console.error(`Error updating order ${order.documentId}:`, error);
+            const appliedDiscountString = appliedDiscountsList.length > 0 ? appliedDiscountsList.join("; ") : "No discounts applied";
+
+            const checkoutInfo = {
+                paymentMethod: paymentMethod,
+                paidAmount: totalAmount,
+                paymentDaytime: new Date().toISOString(),
+                appliedDiscount: appliedDiscountString,
+                orderStatus: 'paid',
+                processedByUserName: localStorage.getItem('username') ?? 'Unidentified User'
+                // Mark current order as paid
+            };
+
+            const updateMainOrderResponse = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/orders/${order.documentId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: checkoutInfo }),
             });
-        // Here you would typically send this payment information to your backend
-        // and update the order status to 'paid' in your database.
-        // For demonstration, we'll just log it and potentially update local order status.
-        /*
-        setOrder(prevOrder => ({
-            ...prevOrder,
-            orderStatus: 'paid' // Update order status locally for display
-        }));
-        */
-        // You might also clear discounts or reset the order in a real scenario
+
+            if (!updateMainOrderResponse.ok) {
+                throw new Error(`Failed to update main order status: ${updateMainOrderResponse.statusText}`);
+            }
+
+            // If this order was merged from another, update the status of the source order to 'merged'
+            if (order.mergedWithOderDocId?.length) {
+                const updateMergedOrderResponse = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/orders/${order.mergedWithOderDocId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ data: { orderStatus: 'merged' } }), // Mark source order as merged
+                });
+
+                if (!updateMergedOrderResponse.ok) {
+                    throw new Error(`Failed to update merged order status: ${updateMergedOrderResponse.statusText}`);
+                }
+            }
+
+            // Update all order rows of the current order to 'paid' status
+            await Promise.all(processedOrderRows.map(async (row) => {
+                if (row.orderRowStatus !== 'cancelled') { // Only update non-cancelled rows
+                    const res = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/order-rows/${row.documentId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ data: { orderRowStatus: 'paid', updatedByUserName: localStorage.getItem('username') ?? 'Unidentified User' } }),
+                    });
+                    if (!res.ok) {
+                        console.error(`Failed to update order row ${row.documentId} to paid.`);
+                    }
+                }
+            }));
+
+
+            alert('Payment successful!');
+            window.location.href = '/'; // Redirect after full process
+        } catch (err: any) {
+            console.error("Error during payment:", err);
+            setError(`Payment failed: ${err.message}`);
+        } finally {
+            setLoading(false);
+        }
+    }, [order, processedOrderRows, khmerCustomerDiscount, cbacMembersDiscount, kandalVillageFriendDiscount, customDiscount]);
+
+
+
+
+
+    // Handle merge operation triggered by the modal
+    const handleMergeOrders = async (mergedOrderRows: OrderRow[], sourceOrderId: number, sourceOrderDocId: string) => {
+        if (!order || !order.documentId) {
+            console.error("Current order or its documentId is null, cannot merge.");
+            return;
+        }
+
+        setLoading(true);
+        setError(null);
+
+        try {
+            // 1. Create new order rows in Strapi, linked to the current order
+            const newOrderRowsToCreate = mergedOrderRows.map(row => ({
+                quantity: row.quantity,
+                subtotal: row.subtotal, // Use original subtotal/taxes for creation, recalculation will happen
+                taxesSubtotal: row.taxesSubtotal,
+                product_doc_id: row.product_doc_id,
+                order_doc_id: order.documentId, // Link new rows to the current order
+                category_doc_id: row.category_doc_id,
+                orderRowStatus: 'served',
+                createdByUserName: localStorage.getItem('username') ?? 'Unidentified User',
+                updatedByUserName: localStorage.getItem('username') ?? 'Unidentified User'
+                // New rows typically start as pending
+            }));
+
+            const createdRowResponses = await Promise.all(newOrderRowsToCreate.map(async (newRow) => {
+                const res = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/order-rows`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ data: newRow }),
+                });
+                if (!res.ok) { throw new Error(`Failed to create order row: ${res.statusText}`); }
+                return (await res.json()).data;
+            }));
+
+            // Fetch the products for the newly created rows to populate their `product` field locally
+            const populatedNewRows = await Promise.all(createdRowResponses.map(async (item: any) => {
+                let product: Product | undefined = undefined;
+                if (item.product_doc_id) {
+                    const productRes = await fetch(
+                        `${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/products/${item.product_doc_id}`,
+                        { cache: 'no-store' }
+                    );
+                    if (productRes.ok) {
+                        const productData = await productRes.json();
+                        if (productData.data) {
+                            product = {
+                                id: productData.data.id,
+                                documentId: productData.data.documentId,
+                                name: productData.data.name,
+                                price: productData.data.price,
+                                vat: productData.data.vat,
+                                description: productData.data.description,
+                                imageUrl: productData.data.image?.formats?.thumbnail?.url
+                            };
+                        }
+                    }
+                }
+                return {
+                    id: item.id,
+                    documentId: item.documentId,
+                    quantity: item.quantity,
+                    subtotal: parseFloat(item.subtotal),
+                    taxesSubtotal: parseFloat(item.taxesSubtotal),
+                    product_doc_id: item.product_doc_id,
+                    order_doc_id: item.order_doc_id,
+                    category_doc_id: item.category_doc_id,
+                    createdAt: item.createdAt,
+                    orderRowStatus: item.orderRowStatus,
+                    updatedAt: item.updatedAt,
+                    product: product,
+                } as OrderRow;
+            }));
+
+            //  Corrected Merging Logic:
+            //  'order' is Peppe's order, and 'sourceOrder' is Franco's order.
+            //  Franco's order should be marked as merged and linked to Peppe's.
+            //  Peppe's order should be linked to Franco's.
+
+            //  1. Update Franco's (source) order
+            const updateSourceOrderResponse = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/orders/${sourceOrderDocId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    data: {
+                        orderStatus: 'merged', // Franco's order is now merged
+                        mergedToOrderDocId: order.documentId, // Franco's order merged into Peppe's
+                    }
+                }),
+            });
+
+            if (!updateSourceOrderResponse.ok) {
+                throw new Error(`Failed to update source order with mergedToOrderId: ${updateSourceOrderResponse.statusText}`);
+            }
+
+
+            // 2. Update Peppe's (current) order
+            const updateCurrentOrderResponse = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/orders/${order.documentId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    data: {
+                        mergedWithOrderDocId: sourceOrderDocId, // Peppe's order merged with Franco's
+                    }
+                }),
+            });
+
+            if (!updateCurrentOrderResponse.ok) {
+                throw new Error(`Failed to update current order (Peppe) with mergedWithOrderId: ${updateCurrentOrderResponse.statusText}`);
+            }
+
+
+
+
+            // 4. Update local state of the current order immediately
+            setOrder(prevOrder => ({
+                ...prevOrder!,
+                order_rows: [...prevOrder!.order_rows, ...populatedNewRows],
+                //  These are now incorrect, as the sourceOrderId and sourceOrderDocId belong to Franco's order,
+                //  and we're updating Peppe's order.  Removing these to avoid confusion.
+                //  mergedFromOrderId: sourceOrderId,
+                //  mergedFromOrderDocId: sourceOrderDocId,
+            }));
+
+            setIsMergeModalOpen(false); // Close the modal
+            // Instead of `fetchData()`, we can trigger a reload for full consistency
+            window.location.reload(); // Forces a fresh fetch of all data on the page
+            onOrderMerged(sourceOrderId, sourceOrderDocId); // Notify parent component
+
+        } catch (err: any) {
+            console.error("Error merging orders:", err);
+            setError(`Failed to merge orders: ${err.message}`);
+        } finally {
+            setLoading(false);
+        }
     };
+
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <p className="text-lg ">Loading details...</p>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-red-100 text-red-700 p-4 rounded-md">
+                <p className="text-lg">{error}</p>
+            </div>
+        );
+    }
 
     return (
         <main className="flex min-h-screen flex-col items-center px-4 sm:px-8 md:px-24 py-8 bg-background text-foreground">
@@ -338,10 +442,26 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
                     <Link href="/" passHref>
                         <Image src="/logo.png" alt="Logo" width={80} height={80} className="logo" priority />
                     </Link>
+                    <p className="text-primary font-bold text-center capitalize pt-4">{userName}</p>
                 </div>
-                <Button className='bg-emerald-500 text-white px-4' size="lg" onClick={() => setIsPaymentModalOpen(true)}>
-                    Pay
-                </Button>
+                <div className="flex space-x-4">
+                    <Button
+                        className='bg-blue-600 text-white px-4'
+                        size="lg"
+                        onClick={() => setIsMergeModalOpen(true)}
+                        disabled={order.orderStatus === 'paid' || order.orderStatus === 'merged'} // Disable if already paid/merged
+                    >
+                        Merge Order
+                    </Button>
+                    <Button
+                        className='bg-emerald-500 text-white px-4'
+                        size="lg"
+                        onClick={() => setIsPaymentModalOpen(true)}
+                        disabled={activeOrderRowsCount === 0 || order.orderStatus === 'paid'}
+                    >
+                        Pay
+                    </Button>
+                </div>
             </div>
 
             <div className='my-8 text-center'>
@@ -363,7 +483,9 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
                                         ? 'text-blue-500 ms-2'
                                         : order.orderStatus === 'cancelled'
                                             ? 'text-red-500 ms-2'
-                                            : 'text-gray-500 ms-2'
+                                            : order.orderStatus === 'merged' // Added merged status color
+                                                ? 'text-purple-500 ms-2'
+                                                : 'text-gray-500 ms-2'
                         }
                     >
                         {order.orderStatus || 'N/D'}
@@ -372,12 +494,23 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
                 <p><strong>Table Name / Table Number:</strong> {order.tableName || 'N/D'}</p>
                 <p><strong>Created At:</strong> {new Date(order.createdAt).toLocaleString('it-IT')}</p>
 
+                {order.mergedWithOderDocId?.length && (
+                    <p className="text-purple-600 font-semibold mt-2">
+                        Merged from Order: {order.mergedWithOderDocId}
+                    </p>
+                )}
+
+
                 <h3 className="text-xl font-semibold mt-6 mb-2">Products:</h3>
                 {processedOrderRows && processedOrderRows.length > 0 ? (
                     <ul className="divide-y divide-border">
                         {processedOrderRows.map(row => (
                             <div key={row.documentId} className={`py-3 ${row.orderRowStatus === 'cancelled' ? 'opacity-50 line-through bg-gray-100 dark:bg-gray-800' : ''}`}>
-                                <OrderRowDisplay key={row.documentId} row={row} showPaidSwitcher={true}/>
+                                <OrderRowDisplay
+                                    key={row.documentId}
+                                    row={row}
+                                    showPaidSwitcher={true}
+                                />
                             </div>
                         ))}
                     </ul>
@@ -430,9 +563,9 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
                                 className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
                             />
                             <label htmlFor="kandalVillageFriend" className="text-lg font-medium text-foreground">
-                                Kandal Village Friend (15% off total order row)
+                                Kandal Village Friend (15% off all items)
                             </label>
-                        </div>
+                        </div >
 
                         {/* Display current Custom Discount if applied */}
                         {customDiscount.value > 0 && (
@@ -468,7 +601,7 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
                             <span>Total Taxes Included:</span> {/* Display tax portion */}
                             <span>€{calculatedTotalTaxesUSD.toFixed(2)}</span>
                         </div>
-              
+
                         {/* FINAL Grand Total (USD) */}
                         <div className="flex justify-between items-center text-xl font-bold text-primary mb-2">
                             <span>Final Total (USD):</span>
@@ -509,12 +642,21 @@ export default function OrderCheckoutWrapper({ initialOrder }: OrderCheckoutWrap
                 currentCustomDiscount={customDiscount}
             />
 
+            {/* Payment Modal */}
             <PaymentModal
                 isOpen={isPaymentModalOpen}
                 onClose={() => setIsPaymentModalOpen(false)}
                 onPaid={handlePayment}
                 totalInDollars={refinedGrandTotalUSD.toFixed(1)}
-                totalInRiels={refinedGrandTotalRiel.toFixed(0)} // Pass the refined Riel total
+                totalInRiels={refinedGrandTotalRiel.toFixed(0)}
+            />
+
+            {/* Merge Order Modal */}
+            <MergeOrderModal
+                isOpen={isMergeModalOpen}
+                onClose={() => setIsMergeModalOpen(false)}
+                onMerge={handleMergeOrders} // Pass the new handleMergeOrders function
+                currentOrderId={order.id} // Pass the current order's internal ID
             />
         </main>
     );

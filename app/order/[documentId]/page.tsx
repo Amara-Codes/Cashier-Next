@@ -2,59 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation'; // Importa useParams per i client components
-import OrderDisplayWrapper from "@/components/OrderDisplayWrapper"; // Importa il nuovo client component
+import OrderDisplayWrapper from "@/components/OrderDisplayWrapper";
+
+import { Order, OrderRow, Product, Category } from '@/types';// Importa il nuovo client component
 
 // Definisci le tue interfacce esistenti: ProductInfo, OrderRow, CustomerInfo, Order, Category, Product
-type OrderRowStatus = 'pending' | 'served' | 'paid' | 'cancelled';
 
-interface OrderRow { // From page.tsx
-    id: number;
-    documentId: string; // Added for clarity
-    quantity: number;
-    subtotal: number;
-    taxesSubtotal: number;
-    category_doc_id?: string; // Optional for consistency with OrderRow
-    product_doc_id?: string; // Changed to productId for clarity
-    order_doc_id?: string;
-    product?: Product;
-    createdAt: string;
-    orderRowStatus?: OrderRowStatus;
-    updatedAt: string
-}
 
-interface CustomerInfo {
-    id: number;
-    name: string;
-    email?: string;
-}
 
-interface Order {
-    id: number;
-    orderStatus?: string;
-    documentId?: string; // Aggiunto per chiarezza
-    tableName?: string;
-    customerName?: string;
-    customer?: CustomerInfo;
-    createdAt: string;
-    order_rows: OrderRow[];
-}
 
-interface Product {
-    id: number;
-    documentId: string;
-    name: string;
-    price: number;
-    description?: string;
-    vat?: number;
-    imageUrl?: string;
-}
-
-interface Category {
-    id: number;
-    documentId?: string; // Aggiunto per chiarezza
-    name: string;
-    products?: Product[];
-}
 
 /**
  * Recupera i dati delle categorie dall'API Strapi.

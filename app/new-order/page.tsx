@@ -5,37 +5,21 @@ import React, { useState, useEffect } from 'react';
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import ProductSelectionModal from '@/components/ProductSelectionModal'; 
+import ProductSelectionModal from '@/components/ProductSelectionModal';
+import { Product, Category } from '@/types';
 
 
 interface OrderData {
   customerName: string;
   tableName: string;
   orderStatus?: string;
-}
-
-
-interface Product {
-  id: number;
-  documentId?: string; 
-  name: string;
-  price: number;
-  description?: string;
-  vat?: number;
-}
-
-
-interface Category {
-  id: number;
-  documentId?: string; 
-  name: string;
-  products?: Product[];
+  createdByUserName?: string
 }
 
 // Define a type for the created order
 interface CreatedOrder {
   id: number;
-  documentId?: string; 
+  documentId?: string;
   customerName: string;
   tableName: string;
   orderStatus?: string;
@@ -44,6 +28,7 @@ interface CreatedOrder {
 
 export default function NewOrderPage() {
   const [customerName, setCustomerName] = useState('');
+  const [userName, setUserName] = useState('')
   const [tableName, setTableName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +37,21 @@ export default function NewOrderPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const strapiUrl = process.env.NEXT_PUBLIC_STRAPI_URL || "http://localhost:1337";
+
+  useEffect(() => {
+    const checkUser = async () => {
+      setIsLoading(true);
+      const jwt = localStorage.getItem('jwt'); // Recupera il JWT dal localStorage
+      if (!jwt) {
+        setIsLoading(false);
+        window.location.href = "/login";
+        return; // Non autenticato, ferma qui
+      }
+      setUserName(localStorage.getItem('username') ?? 'Unidentified User')
+      setIsLoading(false);
+    };
+    checkUser();
+  }, []); // 
 
   const handleCreateOrderAndFetchCategories = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -70,14 +70,19 @@ export default function NewOrderPage() {
       customerName: customerName,
       tableName: tableName,
       orderStatus: "pending",
+      createdByUserName: localStorage.getItem('username') ?? 'Unidentified User'
     };
 
+    console.log(orderPayload)
+
     try {
+      
       const orderResponse = await fetch(`${strapiUrl}/api/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: orderPayload }), 
+        body: JSON.stringify({ data: orderPayload }),
       });
+      
 
       if (!orderResponse.ok) {
         const errorData = await orderResponse.json();
@@ -148,15 +153,15 @@ export default function NewOrderPage() {
     }
   };
 
-  const handleProductAddToOrderCallback = async ( 
+  const handleProductAddToOrderCallback = async (
     product: Product,
     quantity: number,
     orderDocId: string,
-    categoryDocId: string, 
+    categoryDocId: string,
   ) => {
     //setUserMessage(null); // Opzionale: resetta messaggi precedenti
 
-   
+
     // 1. Validazione dei dati di input (opzionale ma consigliata)
     if (typeof product.price !== 'number' || isNaN(product.price)) {
       console.error('Errore: prezzo del prodotto non valido.', product);
@@ -191,11 +196,13 @@ export default function NewOrderPage() {
       category_doc_id: categoryDocId, // Aggiungiamo categoryId per il contesto
       quantity: quantity,
       subtotal: parseFloat(subtotal.toFixed(2)), // Arrotonda a 2 decimali, invia come numero
-      taxesSubtotal: parseFloat(taxes.toFixed(2)),  
-      orderRowStatus: 'pending'      // Arrotonda a 2 decimali, invia come numero
+      taxesSubtotal: parseFloat(taxes.toFixed(2)),
+      orderRowStatus: 'pending',
+      createdByUserName: localStorage.getItem('username') ?? 'Unidentified User',
+      updatedByUserName: localStorage.getItem('username') ?? 'Unidentified User'
     };
 
-   
+
 
     try {
       // 4. Effettua la chiamata POST
@@ -244,6 +251,7 @@ export default function NewOrderPage() {
               priority
             />
           </Link>
+          <p className="text-primary font-bold text-center capitalize pt-4">{userName}</p>
         </div>
       </div>
 

@@ -41,7 +41,10 @@ export default function LoginPage() {
       }
 
       const data = await response.json();
-      localStorage.setItem('jwt', data.jwt); // Store the JWT
+
+      console.log(data)
+      localStorage.setItem('jwt', data.jwt); 
+      localStorage.setItem('username', data.user.username);
       router.push('/'); // Redirect to home page after successful login
     } catch (err) {
       console.error('Login error:', err);
@@ -59,12 +62,12 @@ export default function LoginPage() {
           {/* Email Input */}
           <div className="relative z-0 w-full group">
             <input
-              type="email" name="email" id="email"
+              type="text" name="email" id="email"
               className="block py-2.5 px-0 w-full text-sm text-foreground bg-transparent border-0 border-b-2 border-input appearance-none focus:outline-none focus:ring-0 focus:border-primary peer pl-2"
               placeholder=" " required value={email} onChange={(e) => setEmail(e.target.value)} disabled={isLoading}
             />
             <label htmlFor="email" className="peer-focus:font-medium absolute text-sm text-muted-foreground duration-300 transform -translate-y-8 scale-75 top-3 -z-10 origin-[0] peer-focus:start-0 rtl:peer-focus:translate-x-1/4 peer-focus:text-primary peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-8">
-              Email
+              Email / Username
             </label>
           </div>
 

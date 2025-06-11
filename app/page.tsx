@@ -6,39 +6,15 @@ import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { useRouter } from 'next/navigation'; // Per reindirizzare
-import { LogoutButton } from '@/components/LogoutButton'; // Assicurati che questo file esista
-
-// Define interfaces for your data structures, consistent with OrderDisplayWrapper.tsx
-interface OrderRow {
-  id: number;
-  documentId: string;
-  quantity: number;
-  subtotal: number;
-  taxesSubtotal: number;
-  category_doc_id?: string;
-  product_doc_id?: string;
-  order_doc_id?: string;
-  createdAt: string;
-  orderRowStatus?: 'pending' | 'served' | 'paid' | 'cancelled';
-}
-
-interface Order {
-  id: number;
-  documentId: string; // Ensure documentId is present for linking
-  orderStatus?: string;
-  tableName?: string;
-  customerName?: string;
-  createdAt: string;
-  paymentDaytime?: string; // Add this field to the Order interface
-  order_rows: OrderRow[];
-}
+import { LogoutButton } from '@/components/LogoutButton';
+import { Order } from "@/types";  // Assicurati che questo file esista
 
 export default function HomePage() { // Rinominato in HomePage per chiarezza, il nome del file 'page.tsx' è ciò che conta
-  const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]); // Stato per tutti gli ordini fetched
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [userName, setUserName] = useState('')
 
   const STRAPI_URL = process.env.NEXT_PUBLIC_STRAPI_URL;
 
@@ -47,6 +23,7 @@ export default function HomePage() { // Rinominato in HomePage per chiarezza, il
       setIsLoading(true);
       const jwt = localStorage.getItem('jwt'); // Recupera il JWT dal localStorage
 
+      setUserName(localStorage.getItem('username') ?? 'Unidentified User')
       if (!jwt) {
         setIsAuthenticated(false);
         setIsLoading(false);
@@ -129,6 +106,10 @@ export default function HomePage() { // Rinominato in HomePage per chiarezza, il
     return false;
   });
 
+  const formatMinutes = (minutes: number): string => {
+    return minutes < 10 ? `0${minutes}` : minutes.toString();
+};
+
   if (isLoading) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground">
@@ -164,6 +145,7 @@ export default function HomePage() { // Rinominato in HomePage per chiarezza, il
             className="logo"
             priority
           />
+          <p className="text-primary font-bold text-center capitalize pt-4">{userName}</p>
         </div>
         <div className="flex gap-x-2">
           <Button asChild size="lg" className="px-2">
@@ -195,7 +177,7 @@ export default function HomePage() { // Rinominato in HomePage per chiarezza, il
                   <div className="p-4 border-2 border-orange-400 rounded-lg shadow-sm hover:shadow-lg transition-shadow cursor-pointer animate-vibrate bg-white">
                     <p className="font-bold text-lg text-gray-900">Table: {order.tableName || 'N/A'}</p>
                     <p className="text-orange-400 font-bold text-lg mb-4">{order.customerName}</p>
-                    <p className="text-sm text-gray-600">Created: <span className="font-semibold text-orange-600">{`${new Date(order.createdAt).getHours()}:${new Date(order.createdAt).getMinutes()}`}</span></p>
+                    <p className="text-sm text-gray-600">Created: <span className="font-semibold text-orange-600">{`${new Date(order.createdAt).getHours()}:${formatMinutes(new Date(order.createdAt).getMinutes())}`}</span></p>
                   </div>
                 </Link>
               ))}
@@ -218,7 +200,7 @@ export default function HomePage() { // Rinominato in HomePage per chiarezza, il
                   <div className="p-4 border-2 border-solid border-green-400 rounded-lg shadow-sm hover:shadow-lg transition-shadow cursor-pointer bg-green-50">
                     <p className="font-bold text-lg text-gray-900">Table: {order.tableName || 'N/A'}</p>
                     <p className="font-bold text-lg text-green-500 mb-4">{order.customerName}</p>
-                    <p className="text-sm text-gray-600">Created: <span className="font-semibold text-green-600">{`${new Date(order.createdAt).getHours()}:${new Date(order.createdAt).getMinutes()}`}</span></p>
+                    <p className="text-sm text-gray-600">Created: <span className="font-semibold text-green-600">{`${new Date(order.createdAt).getHours()}:${formatMinutes(new Date(order.createdAt).getMinutes())}`}</span></p>
                   </div>
                 </Link>
               ))}

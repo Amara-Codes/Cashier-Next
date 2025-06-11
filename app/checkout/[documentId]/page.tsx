@@ -1,53 +1,12 @@
 "use client"; // Questa direttiva marca il componente come client component
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation'; // Importa useParams per i client components
-import OrderCheckoutWrapper from '@/components/OrderCheckoutWrapper'; // Importa il nuovo client component
+import OrderCheckoutWrapper from '@/components/OrderCheckoutWrapper'; 
+import { Product, Order, OrderRow } from '@/types';// Importa il nuovo client component
 
 // Definisci le tue interfacce esistenti: Product, OrderRow, CustomerInfo, Order, Category, Product
-type OrderRowStatus = 'pending' | 'served' | 'paid' | 'cancelled';
 
-interface Product {
-    id: number;
-    documentId?: string; // Opzionale per consistenza con OrderRow
-    name: string;
-    price: number;
-    vat?: number; // Aggiunto per consistenza con modale e calcoli
-    description?: string;
-    imageUrl?: string
-}
-
-interface OrderRow { // From page.tsx
-    id: number;
-    documentId: string; // Added for clarity
-    quantity: number;
-    subtotal: number;
-    taxesSubtotal: number;
-    category_doc_id?: string; // Optional for consistency with OrderRow
-    product_doc_id?: string; // Changed to productId for clarity
-    order_doc_id?: string;
-    product?: Product;
-    createdAt: string;
-    orderRowStatus?: OrderRowStatus;
-    updatedAt: string // Added for clarity
-}
-
-interface CustomerInfo {
-    id: number;
-    name: string;
-    email?: string;
-}
-
-interface Order {
-    id: number;
-    orderStatus?: string;
-    documentId?: string; // Aggiunto per chiarezza
-    tableName?: string;
-    customerName?: string;
-    customer?: CustomerInfo;
-    createdAt: string;
-    order_rows: OrderRow[];
-}
 
 /**
  * Recupera i dati dell'ordine e le relative righe d'ordine e dettagli del prodotto dall'API Strapi.
@@ -198,7 +157,15 @@ export default function OrderDetailPage() {
         };
 
         fetchData();
-    }, [orderIdFromUrl]); // Riesegui l'effetto se orderIdFromUrl cambia
+    }, [orderIdFromUrl]);
+
+    const handleOrderMergedCallback = useCallback((sourceOrderId: number, sourceOrderDocId: string) => {
+        // When a merge happens in the child component, we can simply reload the page
+        // to get the latest state including the merged rows and updated `mergedFrom` fields.
+        // This is a direct implementation of the "no fetchData" constraint.
+        window.location.reload();
+    }, []);
+
 
     if (loading) {
         return (
@@ -226,5 +193,5 @@ export default function OrderDetailPage() {
     }
 
     // Passa l'ordine e le categorie al componente wrapper client
-    return <OrderCheckoutWrapper initialOrder={order} />;
+    return <OrderCheckoutWrapper initialOrder={order}  onOrderMerged={handleOrderMergedCallback}/>;
 }

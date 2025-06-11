@@ -4,56 +4,12 @@
 import React, { useState, useEffect } from 'react';
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from 'next/navigation';
+import { Order, Product } from '@/types';
 import ProductSelectionModal from '@/components/ProductSelectionModal';
 import OrderRowDisplay from '@/components/OrderRowDisplay'; // Adjust path as necessary
 import { Button } from "@/components/ui/button";
-// import { data } from 'autoprefixer'; // This import seems unused and might cause issues. Removed it.
+import { Category } from '@/types';
 
-
-type OrderRowStatus = 'pending' | 'served' | 'paid' | 'cancelled';
-// Re-use or import existing interfaces (ensure they are consistent)
-interface Producs { // From ProductSelectionModal's Product type / page.tsx Producs
-    id: number;
-    documentId?: string;
-    name: string;
-    price: number;
-    description?: string;
-    vat?: number;
-    imageUrl?: string // Crucial for tax calculation
-}
-
-interface OrderRow { // From page.tsx
-    id: number;
-    documentId: string; // Added for clarity
-    quantity: number;
-    subtotal: number;
-    taxesSubtotal: number;
-    category_doc_id?: string; // Optional for consistency with OrderRow
-    product_doc_id?: string; // Changed to productId for clarity
-    order_doc_id?: string;
-    product?: Producs;
-    createdAt: string;
-    orderRowStatus?: OrderRowStatus;
-    updatedAt: string
-}
-
-interface Order { // From page.tsx
-    id: number;
-    documentId?: string; // Added for clarity
-    orderStatus?: string;
-    tableName?: string;
-    customerName?: string; // Keep customerName if it's a direct attribute on Order
-    createdAt: string;
-    order_rows: OrderRow[];
-}
-
-interface Category { // From ProductSelectionModal / page.tsx
-    id: number;
-    documentId?: string;
-    name: string;
-    products?: Producs[];
-}
 
 // For the modal's createdOrder prop
 interface CreatedOrderInfo {
@@ -62,6 +18,7 @@ interface CreatedOrderInfo {
     customerName: string; // Still needed for the modal's prop
     tableName: string;
     orderStatus?: string;
+    createdByUserName?: string
 }
 
 
@@ -73,15 +30,18 @@ interface OrderDisplayWrapperProps {
 export default function OrderDisplayWrapper({ initialOrder, categories }: OrderDisplayWrapperProps) {
     const [order, setOrder] = useState<Order>(initialOrder);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [userName, setUserName] = useState('')
+
 
     useEffect(() => {
+        setUserName(localStorage.getItem('username') ?? 'Unidentified User');
         setOrder(initialOrder);
     }, [initialOrder]); // Update state if props change (e.g., after router.refresh)
 
     // NEW useEffect for managing order status based on order_rows
     useEffect(() => {
         // Only proceed if there are order rows or if there were rows that are now all cancelled
-        if (order.order_rows) {
+        if (order.order_rows && order.orderStatus !== 'merged') {
             const nonCancelledRows = order.order_rows.filter(row => row.orderRowStatus !== 'cancelled');
             const allRowsCancelled = order.order_rows.length > 0 && order.order_rows.every(row => row.orderRowStatus === 'cancelled');
 
@@ -117,7 +77,7 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
 
             console.log("New calculated order status:", newCalculatedOrderStatus);
 
-            if (newCalculatedOrderStatus && newCalculatedOrderStatus !== order.orderStatus) {
+            if (newCalculatedOrderStatus && newCalculatedOrderStatus !== order.orderStatus ) {
                 updateOrderStatus(newCalculatedOrderStatus)
             }
         }
@@ -153,7 +113,7 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
             console.log(`Order ${order.id} status updated to: ${newStatus}`);
             setOrder((prevOrder) => ({
                 ...prevOrder,
-                orderStatus: newStatus,
+                orderStatus: newStatus as Order['orderStatus'],
             }));
 
         } catch (error: any) {
@@ -162,7 +122,7 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
     };
 
 
-    const handleProductAddToOrder = async (product: Producs, quantity: number, orderDocId: string, categoryDocId: string) => {
+    const handleProductAddToOrder = async (product: Product, quantity: number, orderDocId: string, categoryDocId: string) => {
         if (!product || typeof product.price !== 'number') {
             alert("Selected product is invalid or missing price information.");
             return;
@@ -180,7 +140,9 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
                 order_doc_id: orderDocId,
                 product_doc_id: product.documentId,
                 category_doc_id: categoryDocId,
-                orderRowStatus: 'pending'
+                orderRowStatus: 'pending',
+                createdByUserName: localStorage.getItem('username') ?? 'Unidentified User',
+                updatedByUserName: localStorage.getItem('username') ?? 'Unidentified User'
             }
         };
 
@@ -235,6 +197,7 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
                     <Link href="/" passHref>
                         <Image src="/logo.png" alt="Logo" width={80} height={80} className="logo" priority />
                     </Link>
+                    <p className="text-primary font-bold text-center capitalize pt-4">{userName}</p>
                 </div>
                 {order.orderStatus !== 'paid' && (
                     <div className='flex gap-x-2'>
