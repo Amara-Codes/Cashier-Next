@@ -33,12 +33,12 @@ export default function HomePage() {
   const firstFetch = useRef(true); // To track the initial fetch
   const STRAPI_URL = process.env.NEXT_PUBLIC_STRAPI_URL;
   // Ref to hold the audio element
-  const soundRef = useRef<HTMLAudioElement>(null);
+  const newOrderSound = useRef<HTMLAudioElement>(null);
   // Function to play the sound
-  const playSound = useCallback(() => {
-    if (soundRef.current) {
-      soundRef.current.currentTime = 0; // Rewind to the beginning if it's playing
-      soundRef.current.play();
+  const playNewOrderSound = useCallback(() => {
+    if (newOrderSound.current) {
+      newOrderSound.current.currentTime = 0; // Rewind to the beginning if it's playing
+      newOrderSound.current.play();
     }
   }, []); // No dependencies, so it's stable
   // This function will fetch orders.
@@ -127,7 +127,7 @@ export default function HomePage() {
         setPreviousPendingOrdersCount(currentPendingOrdersCount);
         firstFetch.current = false; // Mark first fetch as complete
       } else if (previousPendingOrdersCount !== null && currentPendingOrdersCount !== previousPendingOrdersCount) {
-        playSound(); // Play sound if count differs from previous, excluding the initial load
+        playNewOrderSound(); // Play sound if count differs from previous, excluding the initial load
         setPreviousPendingOrdersCount(currentPendingOrdersCount);
       } else if (previousPendingOrdersCount === null) {
         // This case handles scenarios where previousPendingOrdersCount might still be null
@@ -148,7 +148,7 @@ export default function HomePage() {
         clearInterval(intervalId);
       }
     };
-  }, [fetchOrders, fetchError, orders.length, playSound, previousPendingOrdersCount]);
+  }, [fetchOrders, fetchError, orders.length, playNewOrderSound, previousPendingOrdersCount]);
   // Filter orders after they have been fetched and are in the 'orders' state
   const today = new Date();
   today.setHours(0, 0, 0, 0); // Normalize today's date to midnight
@@ -203,9 +203,6 @@ export default function HomePage() {
       }
       const orderRowsResponseData = await orderRowsResponse.json();
 
-
-
-      // Restituisce l'oggetto ordine costruito
       return {
         id: orderResponseData.data.id, // Usa l'ID effettivo da Strapi
         documentId: actualOrderDocId,
@@ -218,7 +215,6 @@ export default function HomePage() {
       return null;
     }
   }
-
 
   async function getFoodOrderData(orderRows: OrderRow[]): Promise<any> {
     let foodOrderData = []
@@ -253,9 +249,7 @@ export default function HomePage() {
 
         getFoodOrderData(orderData.order_rows).then((foodOrderData) => {
           if (foodOrderData) {
-
             setFoodData(ProcessFoodData(foodOrderData) ? [ProcessFoodData(foodOrderData)] : []);
-
           }
         });
       }
@@ -358,7 +352,7 @@ export default function HomePage() {
                 <a className="block p-4 border-2 border-orange-400 rounded-lg shadow-sm hover:shadow-lg transition-shadow cursor-pointer animate-vibrate bg-white">
                   {foodData.length > 0 && foodData[0].hasFoodToCook && (
                     <div className="flex justify-end">
-
+   <audio  src="/notification.mp3" autoPlay/> 
                       <svg fill="#000000" height="40" width="40" version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 513.164 513.164" xmlSpace="preserve">
                         <g>
@@ -443,7 +437,7 @@ export default function HomePage() {
                   {foodData.length > 0 && foodData[0].allFoodIsCoocked && (
 
                     <div className="flex justify-end">
-
+   <audio  src="/ready.mp3" autoPlay/> 
                       <svg fill="#000000" height="40" width="40" version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 512 512" xmlSpace="preserve">
                         <g>
@@ -533,6 +527,6 @@ export default function HomePage() {
       )}
     </div>
     {/* Audio element to play the sound */}
-    <audio ref={soundRef} src="/notification.mp3" /> {/* Make sure you have a 'notification.mp3' in your public folder */}
+ {/* Make sure you have a 'notification.mp3' in your public folder */}
   </main>);
 }
