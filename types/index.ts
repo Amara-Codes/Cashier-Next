@@ -28,6 +28,8 @@ export interface Category {
   documentId?: string;
   name: string;
   products?: Product[];
+  isFood?: boolean; // Indicates if the category is food-related
+  isAlcoholic?: boolean; // Indicates if the category is drink-related
 }
 
 export interface OrderRow {
