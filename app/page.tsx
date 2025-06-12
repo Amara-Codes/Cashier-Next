@@ -11,17 +11,13 @@ import Image from "next/image";
 import {
   Button
 } from "@/components/ui/button";
-import {
-  useRouter
-} from 'next/navigation';
+
 import {
   LogoutButton
 } from '@/components/LogoutButton';
 import {
-  Order, OrderRow, Product
+  Order, OrderRow
 } from "@/types";
-import { get } from "http";
-import { json } from "stream/consumers";
 export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -29,20 +25,8 @@ export default function HomePage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [userName, setUserName] = useState('');
   const [foodData, setFoodData] = useState<any[]>([]);
-  const [previousPendingOrdersCount, setPreviousPendingOrdersCount] = useState<number | null>(null);
-  const firstFetch = useRef(true); // To track the initial fetch
   const STRAPI_URL = process.env.NEXT_PUBLIC_STRAPI_URL;
-  // Ref to hold the audio element
-  const newOrderSound = useRef<HTMLAudioElement>(null);
-  // Function to play the sound
-  const playNewOrderSound = useCallback(() => {
-    if (newOrderSound.current) {
-      newOrderSound.current.currentTime = 0; // Rewind to the beginning if it's playing
-      newOrderSound.current.play();
-    }
-  }, []); // No dependencies, so it's stable
-  // This function will fetch orders.
-  // Made useCallback for optimization and for use in the interval.
+
   const fetchOrders = useCallback(async () => {
     const jwt = localStorage.getItem('jwt');
     setUserName(localStorage.getItem('username') ?? 'Unidentified User');
@@ -122,19 +106,6 @@ export default function HomePage() {
       await fetchOrders();
       setIsLoading(false);
       // After the fetch, check and update pending orders count for sound notification
-      const currentPendingOrdersCount = orders.filter(order => order.orderStatus === 'pending').length;
-      if (firstFetch.current) {
-        setPreviousPendingOrdersCount(currentPendingOrdersCount);
-        firstFetch.current = false; // Mark first fetch as complete
-      } else if (previousPendingOrdersCount !== null && currentPendingOrdersCount !== previousPendingOrdersCount) {
-        playNewOrderSound(); // Play sound if count differs from previous, excluding the initial load
-        setPreviousPendingOrdersCount(currentPendingOrdersCount);
-      } else if (previousPendingOrdersCount === null) {
-        // This case handles scenarios where previousPendingOrdersCount might still be null
-        // after the very first data load (e.g., if there's a delay in state update).
-        // It ensures previousPendingOrdersCount gets initialized correctly.
-        setPreviousPendingOrdersCount(currentPendingOrdersCount);
-      }
     };
     initialAndIntervalFetch(); // Run immediately on component mount
     // Set up the interval for subsequent fetches
@@ -148,7 +119,7 @@ export default function HomePage() {
         clearInterval(intervalId);
       }
     };
-  }, [fetchOrders, fetchError, orders.length, playNewOrderSound, previousPendingOrdersCount]);
+  }, [fetchOrders, fetchError, orders.length]);
   // Filter orders after they have been fetched and are in the 'orders' state
   const today = new Date();
   today.setHours(0, 0, 0, 0); // Normalize today's date to midnight
@@ -526,7 +497,5 @@ export default function HomePage() {
         <p className="text-gray-600 text-center">No paid orders today yet.</p>
       )}
     </div>
-    {/* Audio element to play the sound */}
- {/* Make sure you have a 'notification.mp3' in your public folder */}
   </main>);
 }
