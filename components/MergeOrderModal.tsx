@@ -169,15 +169,29 @@ const MergeOrderModal: React.FC<MergeOrderModalProps> = ({ isOpen, onClose, onMe
                             className="space-y-3"
                         >
                             {servedOrders.map((order) => (
-                                <div key={order.id} className="flex items-center space-x-4 ps-2">
-                                    <RadioGroupItem value={order.id.toString()} id={`order-${order.id}`} />
-                                    <Label htmlFor={`order-${order.id}`} className="underline">
-                                        Order ID: {order.documentId || order.id} - Table: {order.tableName || 'N/A'} - Items: {order.order_rows.length}
+                                <div key={order.id} className="flex items-center space-x-4 border-b border-gray-200 dark:border-gray-700 pb-4">
+                                    <RadioGroupItem value={order.id.toString()} id={`order-${order.id}`}  />
+                                    <Label htmlFor={`order-${order.id}`} className="grow">
+                                        <div className="flex flex-col w-full">
+                                            <div className="flex justify-between text-primary text-lg font-semibold">
+                                                <p>{order.id} - {order.customerName}</p>
+                                                <p>Table: {order.tableName || 'N/A'}</p>
+                                            </div>
+                                            <div className="flex justify-between pt-2 text-foreground text-sm">
+                                                <p>Items: {order.order_rows.length}</p>
+                                                <p>Created At: {new Date(order.createdAt).toLocaleTimeString()}</p>
+                                            </div>
+
+
+
+                                        </div>
                                     </Label>
                                 </div>
                             ))}
                         </RadioGroup>
                     </div>
+
+
                 )}
 
                 <div className="flex justify-end space-x-2">
