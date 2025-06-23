@@ -386,7 +386,7 @@ export default function HomePage() {
           className="logo"
           priority
         />
-        <p className="text-primary font-bold text-center capitalize pt-4">{userName}</p>
+        <p className="text-primary font-bold text-center capitalize">{userName}</p>
       </div>
       <div className="flex gap-x-2">
         <Button asChild size="lg" className="px-2">
@@ -396,7 +396,7 @@ export default function HomePage() {
       </div>
     </div>
 
-    <h1 className="text-3xl sm:text-4xl font-bold mb-8 text-primary">Current Orders</h1>
+    <h1 className="text-3xl sm:text-4xl font-bold mb-2 lg:mb-8 text-primary">Current Orders</h1>
 
     {fetchError && (
       <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-6 w-full max-w-6xl" role="alert">
@@ -406,7 +406,7 @@ export default function HomePage() {
       </div>
     )}
 
-    <div className="flex w-full max-w-6xl gap-8 flex-col md:flex-row">
+    <div className="flex w-full max-w-6xl gap-2 lg:gap-8 flex-col md:flex-row">
       {/* Pending Orders Section */}
       <div className="flex flex-col items-center flex-1 p-4 bg-card rounded-lg shadow-md">
         <h2 className="text-2xl font-semibold mb-4 text-orange-500">Pending Orders</h2>
@@ -439,7 +439,7 @@ export default function HomePage() {
     </div>
 
     {/* Today's Paid Orders Section */}
-    <div className="w-full max-w-6xl mt-8 p-4 bg-card rounded-lg shadow-md">
+    <div className="w-full max-w-6xl mt-2 lg:mt-8 p-4 bg-card rounded-lg shadow-md">
       <h2 className="text-2xl font-semibold mb-4 text-blue-500 text-center">Today's Paid Orders</h2>
       {todayPaidOrders.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 w-full">

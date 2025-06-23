@@ -93,7 +93,7 @@ export default function ProductSelectionModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
       {/* Modifiche per mobile qui */}
       <div className="bg-card p-4 rounded-lg shadow-xl w-[95%] max-w-lg h-[95vh] flex flex-col text-foreground
-                      md:p-6 md:max-w-3xl md:h-[80vh]">
+                      md:p-6 md:max-w-3xl md:h-[95vh]">
         <div className="flex justify-between items-center mt-4 mb-8">
           {/* Modifiche per mobile qui */}
           <h2 className="text-xl md:text-2xl font-semibold text-primary">Order: {createdOrder?.id} - {createdOrder?.customerName}</h2>
@@ -109,7 +109,7 @@ export default function ProductSelectionModal({
           <div className="w-full h-1/2 md:h-auto md:w-1/3 border-b md:border-b-0 md:border-r border-border pb-4 md:pb-0 md:pr-4 overflow-y-auto">
             <h3 className="lg:text-lg font-bold mb-3 text-primary">Categories</h3>
             {categories.length > 0 ? (
-              <ul className="space-y-2">
+              <ul className="space-y-2 border border-primary rounded-md">
                 {categories.map((category) => (
                   <li key={category.id}>
                     <Button
@@ -135,7 +135,7 @@ export default function ProductSelectionModal({
             </h3>
             {selectedCategoryDocId ? (
               categoryProducts.length > 0 ? (
-                <ul className="space-y-2 flex-1 overflow-y-auto">
+                <ul className="space-y-2 flex-1 overflow-y-auto border border-primary rounded-md">
                   {categoryProducts.map((product) => (
                     <li key={product.id}>
                       <Button

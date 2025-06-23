@@ -197,7 +197,7 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
                     <Link href="/" passHref>
                         <Image src="/logo.png" alt="Logo" width={80} height={80} className="logo" priority />
                     </Link>
-                    <p className="text-primary font-bold text-center capitalize pt-4">{userName}</p>
+                    <p className="text-primary font-bold text-center capitalize">{userName}</p>
                 </div>
                 {order.orderStatus !== 'paid' && (
                     <div className='flex gap-x-2'>

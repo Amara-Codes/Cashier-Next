@@ -251,7 +251,8 @@ export default function NewOrderPage() {
               priority
             />
           </Link>
-          <p className="text-primary font-bold text-center capitalize pt-4">{userName}</p>
+          <p className="text-primary font-bold text-center capitalize
+          ">{userName}</p>
         </div>
       </div>
 

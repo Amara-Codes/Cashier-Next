@@ -443,7 +443,7 @@ export default function OrderCheckoutWrapper({ initialOrder, onOrderMerged }: Or
                     <Link href="/" passHref>
                         <Image src="/logo.png" alt="Logo" width={80} height={80} className="logo" priority />
                     </Link>
-                    <p className="text-primary font-bold text-center capitalize pt-4">{userName}</p>
+                    <p className="text-primary font-bold text-center capitalize">{userName}</p>
                 </div>
                 <div className="flex space-x-4">
                     <Button
