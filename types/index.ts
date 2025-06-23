@@ -5,7 +5,7 @@ export type OrderRowStatus =
   | "cancelled"
   | "merged";
 
-  export type OrderStatus =
+export type OrderStatus =
   | "pending"
   | "served"
   | "paid"
@@ -63,4 +63,9 @@ export interface Order {
   mergedWithOderDocId?: string;
   createdByUserName?: string;
   processedByUserName?: string;
+}
+
+export interface FoodData {
+  hasFoodToCook: boolean;
+  allFoodIsCooked: boolean;
 }

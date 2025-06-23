@@ -75,6 +75,7 @@ export default function OrderCheckoutWrapper({ initialOrder, onOrderMerged }: Or
     const [khmerCustomerDiscount, setKhmerCustomerDiscount] = useState<boolean>(false);
     const [cbacMembersDiscount, setCbacMembersDiscount] = useState<boolean>(false);
     const [kandalVillageFriendDiscount, setKandalVillageFriendDiscount] = useState<boolean>(false);
+    const [fWBDiscount, setFWBDiscount] = useState<boolean>(false); // New state for FWB Discount
 
     // New state for custom discount
     const [isCustomDiscountModalOpen, setIsCustomDiscountModalOpen] = useState<boolean>(false);
@@ -130,14 +131,19 @@ export default function OrderCheckoutWrapper({ initialOrder, onOrderMerged }: Or
             currentPrice = Math.max(0, currentPrice - 1);
         }
 
-        // 3. Apply Kandal Village Friend Discount (15% off all items)
+        // 3. Apply FWB Discount (20% off all beer items) - applied after fixed price/dollar off
+        if (fWBDiscount && categoryName && categoryName.toLowerCase() === 'beer') {
+            currentPrice = currentPrice * 0.80; // 20% off
+        }
+
+        // 4. Apply Kandal Village Friend Discount (15% off all items)
         // This discount applies to the price AFTER any previous specific discounts.
         if (kandalVillageFriendDiscount) {
             currentPrice = currentPrice * 0.85;
         }
 
         return currentPrice;
-    }, [khmerCustomerDiscount, cbacMembersDiscount, kandalVillageFriendDiscount]);
+    }, [khmerCustomerDiscount, cbacMembersDiscount, fWBDiscount, kandalVillageFriendDiscount]); // Add fWBDiscount to dependencies
 
     // This useEffect recalculates totals and processes rows whenever relevant state changes
     useEffect(() => {
@@ -178,7 +184,7 @@ export default function OrderCheckoutWrapper({ initialOrder, onOrderMerged }: Or
         };
 
         processOrderAndCalculateBaseTotals();
-    }, [order, khmerCustomerDiscount, cbacMembersDiscount, kandalVillageFriendDiscount, applyItemLevelDiscountsToPrice]);
+    }, [order, khmerCustomerDiscount, cbacMembersDiscount, fWBDiscount, kandalVillageFriendDiscount, applyItemLevelDiscountsToPrice]); // Add fWBDiscount to dependencies
 
     const activeOrderRowsCount = processedOrderRows.filter(row => row.orderRowStatus !== 'cancelled').length;
 
@@ -210,6 +216,7 @@ export default function OrderCheckoutWrapper({ initialOrder, onOrderMerged }: Or
             const appliedDiscountsList: string[] = [];
             if (khmerCustomerDiscount) { appliedDiscountsList.push("Khmer Customer Discount (Beer prices adjusted)"); }
             if (cbacMembersDiscount) { appliedDiscountsList.push("CBAC Members Discount (Beer: -$1 per item)"); }
+            if (fWBDiscount) { appliedDiscountsList.push("FWB Discount (Beer: 20% off)"); } // Add FWB discount string
             if (kandalVillageFriendDiscount) { appliedDiscountsList.push("Kandal Village Friend (15% off total order row)"); }
             if (customDiscount.value > 0) {
                 const customDiscountText = customDiscount.type === 'dollar'
@@ -275,7 +282,7 @@ export default function OrderCheckoutWrapper({ initialOrder, onOrderMerged }: Or
         } finally {
             setLoading(false);
         }
-    }, [order, processedOrderRows, khmerCustomerDiscount, cbacMembersDiscount, kandalVillageFriendDiscount, customDiscount]);
+    }, [order, processedOrderRows, khmerCustomerDiscount, cbacMembersDiscount, fWBDiscount, kandalVillageFriendDiscount, customDiscount]); // Add fWBDiscount to dependencies
 
 
 
@@ -300,10 +307,9 @@ export default function OrderCheckoutWrapper({ initialOrder, onOrderMerged }: Or
                 product_doc_id: row.product_doc_id,
                 order_doc_id: order.documentId, // Link new rows to the current order
                 category_doc_id: row.category_doc_id,
-                orderRowStatus: 'served',
+                orderRowStatus: 'served', // New rows typically start as pending, but if merging, they are likely served
                 createdByUserName: localStorage.getItem('username') ?? 'Unidentified User',
                 updatedByUserName: localStorage.getItem('username') ?? 'Unidentified User'
-                // New rows typically start as pending
             }));
 
             const createdRowResponses = await Promise.all(newOrderRowsToCreate.map(async (newRow) => {
@@ -355,55 +361,50 @@ export default function OrderCheckoutWrapper({ initialOrder, onOrderMerged }: Or
                 } as OrderRow;
             }));
 
-            //  Corrected Merging Logic:
-            //  'order' is Peppe's order, and 'sourceOrder' is Franco's order.
-            //  Franco's order should be marked as merged and linked to Peppe's.
-            //  Peppe's order should be linked to Franco's.
+            // Corrected Merging Logic:
+            // 'order' is the current order, and 'sourceOrder' is the order from which items are merged.
+            // The source order should be marked as merged and linked to the current order.
+            // The current order should be linked to the source order.
 
-            //  1. Update Franco's (source) order
+            // 1. Update source order
             const updateSourceOrderResponse = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/orders/${sourceOrderDocId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     data: {
-                        orderStatus: 'merged', // Franco's order is now merged
-                        mergedToOrderDocId: order.documentId, // Franco's order merged into Peppe's
+                        orderStatus: 'merged', // Source order is now merged
+                        mergedToOrderDocId: order.documentId, // Source order merged into current order
                     }
                 }),
             });
 
             if (!updateSourceOrderResponse.ok) {
-                throw new Error(`Failed to update source order with mergedToOrderId: ${updateSourceOrderResponse.statusText}`);
+                throw new Error(`Failed to update source order with mergedToOrderDocId: ${updateSourceOrderResponse.statusText}`);
             }
 
 
-            // 2. Update Peppe's (current) order
+            // 2. Update current order
             const updateCurrentOrderResponse = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/orders/${order.documentId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     data: {
-                        mergedWithOrderDocId: sourceOrderDocId, // Peppe's order merged with Franco's
+                        mergedWithOrderDocId: sourceOrderDocId, // Current order merged with source order
                     }
                 }),
             });
 
             if (!updateCurrentOrderResponse.ok) {
-                throw new Error(`Failed to update current order (Peppe) with mergedWithOrderId: ${updateCurrentOrderResponse.statusText}`);
+                throw new Error(`Failed to update current order with mergedWithOrderDocId: ${updateCurrentOrderResponse.statusText}`);
             }
-
-
-
 
             // 4. Update local state of the current order immediately
             setOrder(prevOrder => ({
                 ...prevOrder!,
                 order_rows: [...prevOrder!.order_rows, ...populatedNewRows],
-                //  These are now incorrect, as the sourceOrderId and sourceOrderDocId belong to Franco's order,
-                //  and we're updating Peppe's order.  Removing these to avoid confusion.
-                //  mergedFromOrderId: sourceOrderId,
-                //  mergedFromOrderDocId: sourceOrderDocId,
+                mergedWithOrderDocId: sourceOrderDocId, // Update the mergedWithOrderDocId in the current order's state
             }));
+
 
             setIsMergeModalOpen(false); // Close the modal
             // Instead of `fetchData()`, we can trigger a reload for full consistency
@@ -488,11 +489,11 @@ export default function OrderCheckoutWrapper({ initialOrder, onOrderMerged }: Or
                                                 : 'text-gray-500 ms-2'
                         }
                     >
-                        {order.orderStatus || 'N/D'}
+                        {order.orderStatus || 'N/A'}
                     </span></p>
 
-                <p><strong>Table Name / Table Number:</strong> {order.tableName || 'N/D'}</p>
-                <p><strong>Created At:</strong> {new Date(order.createdAt).toLocaleString('it-IT')}</p>
+                <p><strong>Table Name / Table Number:</strong> {order.tableName || 'N/A'}</p>
+                <p><strong>Created At:</strong> {new Date(order.createdAt).toLocaleString('en-US')}</p> {/* Changed to en-US locale */}
 
                 {order.mergedWithOderDocId?.length && (
                     <p className="text-purple-600 font-semibold mt-2">
@@ -553,6 +554,20 @@ export default function OrderCheckoutWrapper({ initialOrder, onOrderMerged }: Or
                             </label>
                         </div>
 
+                        {/* FWB Discount */} {/* New Discount Added */}
+                        <div className="flex items-center space-x-2">
+                            <input
+                                type="checkbox"
+                                id="fWBDiscount"
+                                checked={fWBDiscount}
+                                onChange={(e) => setFWBDiscount(e.target.checked)}
+                                className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                            />
+                            <label htmlFor="fWBDiscount" className="text-lg font-medium text-foreground">
+                                FWB Discount (20% off all beers)
+                            </label>
+                        </div >
+
                         {/* Kandal Village Friend Discount */}
                         <div className="flex items-center space-x-2">
                             <input
@@ -595,23 +610,23 @@ export default function OrderCheckoutWrapper({ initialOrder, onOrderMerged }: Or
                     <div className="mt-8 pt-4 border-t border-border">
                         <div className="flex justify-between items-center text-lg font-semibold mb-2">
                             <span>Subtotal (Net Price):</span> {/* Display non-tax portion */}
-                            <span>€{calculatedTotalNoTaxesUSD.toFixed(2)}</span>
+                            <span>${calculatedTotalNoTaxesUSD.toFixed(2)}</span> {/* Changed € to $ */}
                         </div>
                         <div className="flex justify-between items-center text-lg font-semibold mb-2">
                             <span>Total Taxes Included:</span> {/* Display tax portion */}
-                            <span>€{calculatedTotalTaxesUSD.toFixed(2)}</span>
+                            <span>${calculatedTotalTaxesUSD.toFixed(2)}</span> {/* Changed € to $ */}
                         </div>
 
                         {/* FINAL Grand Total (USD) */}
                         <div className="flex justify-between items-center text-xl font-bold text-primary mb-2">
                             <span>Final Total (USD):</span>
-                            <span>€{finalGrandTotalUSD.toFixed(2)}</span>
+                            <span>${finalGrandTotalUSD.toFixed(2)}</span> {/* Changed € to $ */}
                         </div>
 
                         {/* Refined Grand Total (USD) */}
                         <div className="flex justify-between items-center text-xl font-bold text-primary mb-2">
                             <span>Refined Final Total (USD):</span>
-                            <span>€{refinedGrandTotalUSD.toFixed(1)}</span>
+                            <span>${refinedGrandTotalUSD.toFixed(1)}</span> {/* Changed € to $ */}
                         </div>
 
                         {/* Grand Total in Riel */}

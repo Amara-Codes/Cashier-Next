@@ -41,9 +41,23 @@ const MergeOrderModal: React.FC<MergeOrderModalProps> = ({ isOpen, onClose, onMe
 
                 const responseData = await response.json();
                 if (responseData.data && Array.isArray(responseData.data)) {
-                    // Filter out the current order
+                    // Get today's date, normalized to midnight in the local timezone (Sihanoukville, Cambodia is UTC+7)
+                    // We'll normalize both the current date and the order's created date to compare only the day.
+                    const today = new Date();
+                    // Set hours, minutes, seconds, milliseconds to 0 for consistent day comparison
+                    today.setHours(0, 0, 0, 0);
+
                     const filteredOrders = responseData.data
-                        .filter((orderItem: any) => orderItem.id !== currentOrderId)
+                        .filter((orderItem: any) => {
+                            // Filter out the current order being viewed
+                            if (orderItem.id === currentOrderId) {
+                                return false;
+                            }
+                            // Filter for orders created today
+                            const orderCreatedAt = new Date(orderItem.createdAt);
+                            orderCreatedAt.setHours(0, 0, 0, 0); // Normalize order created date to midnight
+                            return orderCreatedAt.getTime() === today.getTime();
+                        })
                         .map((orderItem: any) => ({
                             id: orderItem.id,
                             documentId: orderItem.documentId || orderItem.id.toString(),
@@ -53,8 +67,7 @@ const MergeOrderModal: React.FC<MergeOrderModalProps> = ({ isOpen, onClose, onMe
                             createdAt: orderItem.createdAt,
                         }));
 
-                    // Fetch order rows for each filtered order (example, you may need to adapt this logic)
-                    // You probably want to fetch order rows and attach them to each order
+                    // Fetch order rows for each filtered order
                     const ordersWithRows = await Promise.all(filteredOrders.map(async (orderItem: Order) => {
                         const orderRowsResponse = await fetch(
                             `${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/order-rows?filters[order_doc_id][$eq]=${orderItem.documentId}&populate=*`,
@@ -69,7 +82,7 @@ const MergeOrderModal: React.FC<MergeOrderModalProps> = ({ isOpen, onClose, onMe
                         let fetchedOrderRows: OrderRow[] = [];
                         if (orderRowsResponseData.data && Array.isArray(orderRowsResponseData.data)) {
                             fetchedOrderRows = await Promise.all(orderRowsResponseData.data.map(async (item: any) => {
-                                const rowAttributes = item; // Rimosso .attributes
+                                const rowAttributes = item;
 
                                 let product: Product | undefined = undefined;
                                 if (rowAttributes.product_doc_id) {
@@ -136,7 +149,7 @@ const MergeOrderModal: React.FC<MergeOrderModalProps> = ({ isOpen, onClose, onMe
         if (isOpen) {
             fetchServedOrders();
         }
-    }, [isOpen, currentOrderId]);
+    }, [isOpen, currentOrderId]); // currentOrderId is a dependency because we filter it out
 
     const handleMergeClick = () => {
         if (selectedOrderId) {
@@ -157,7 +170,7 @@ const MergeOrderModal: React.FC<MergeOrderModalProps> = ({ isOpen, onClose, onMe
                 {loading && <p className="text-center text-foreground">Loading served orders...</p>}
                 {error && <p className="text-center text-red-500">{error}</p>}
                 {!loading && !error && servedOrders.length === 0 && (
-                    <p className="text-center text-foreground">No served orders available for merging.</p>
+                    <p className="text-center text-foreground">No served orders available for merging today.</p>
                 )}
 
                 {!loading && !error && servedOrders.length > 0 && (
@@ -170,31 +183,26 @@ const MergeOrderModal: React.FC<MergeOrderModalProps> = ({ isOpen, onClose, onMe
                         >
                             {servedOrders.map((order) => (
                                 <div key={order.id} className="flex items-center space-x-4 border-b border-gray-200 dark:border-gray-700 pb-4">
-                                    <RadioGroupItem value={order.id.toString()} id={`order-${order.id}`}  />
+                                    <RadioGroupItem value={order.id.toString()} id={`order-${order.id}`} />
                                     <Label htmlFor={`order-${order.id}`} className="grow">
                                         <div className="flex flex-col w-full">
                                             <div className="flex justify-between text-primary text-lg font-semibold">
-                                                <p>{order.id} - {order.customerName}</p>
+                                                <p>Order #{order.id} - {order.customerName}</p>
                                                 <p>Table: {order.tableName || 'N/A'}</p>
                                             </div>
                                             <div className="flex justify-between pt-2 text-foreground text-sm">
                                                 <p>Items: {order.order_rows.length}</p>
-                                                <p>Created At: {new Date(order.createdAt).toLocaleTimeString()}</p>
+                                                <p>Created At: {new Date(order.createdAt).toLocaleTimeString('en-US')}</p> {/* Local time format */}
                                             </div>
-
-
-
                                         </div>
                                     </Label>
                                 </div>
                             ))}
                         </RadioGroup>
                     </div>
-
-
                 )}
 
-                <div className="flex justify-end space-x-2">
+                <div className="flex justify-end space-x-2 mt-8">
                     <Button variant="outline" onClick={onClose}>Cancel</Button>
                     <Button
                         onClick={handleMergeClick}
