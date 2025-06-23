@@ -3,9 +3,9 @@
 
 import { useState, useEffect } from 'react';
 import { Order, OrderRow, Product } from '@/types';
-import { Button } from "@/components/ui/button"; // Assuming you have a Button component
-import { Label } from '@/components/ui/label'; // Assuming you have a Label component
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; // Assuming you have RadioGroup for selection
+import { Button } from "@/components/ui/button";
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 
 interface MergeOrderModalProps {
@@ -21,6 +21,39 @@ const MergeOrderModal: React.FC<MergeOrderModalProps> = ({ isOpen, onClose, onMe
     const [error, setError] = useState<string | null>(null);
     const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
 
+    // Helper to get the "business day" date range in ISO format for Strapi, ending at 4 AM of the next calendar day
+    const getBusinessDayDateRange = () => {
+        const now = new Date();
+        let startOfBusinessDay = new Date(now);
+        let endOfBusinessDay = new Date(now);
+
+        // Current time: Monday, June 23, 2025 at 4:27:20 PM +07.
+        // It's after 4 AM, so "today" started at Monday 00:00:00 and ends Tuesday 04:00:00.
+
+        if (now.getHours() < 4) {
+            // If it's before 4 AM (e.g., 2 AM Monday), we're in the business day that started yesterday.
+            // Start: Yesterday 00:00:00
+            startOfBusinessDay.setDate(now.getDate() - 1);
+            startOfBusinessDay.setHours(0, 0, 0, 0);
+
+            // End: Today 04:00:00
+            endOfBusinessDay.setHours(4, 0, 0, 0);
+        } else {
+            // If it's 4 AM or later (e.g., 4:27 PM Monday), we're in the business day that started today.
+            // Start: Today 00:00:00
+            startOfBusinessDay.setHours(0, 0, 0, 0);
+
+            // End: Tomorrow 04:00:00
+            endOfBusinessDay.setDate(now.getDate() + 1);
+            endOfBusinessDay.setHours(4, 0, 0, 0);
+        }
+
+        return {
+            start: startOfBusinessDay.toISOString(),
+            end: endOfBusinessDay.toISOString()
+        };
+    };
+
     useEffect(() => {
         if (!isOpen) {
             setSelectedOrderId(null); // Reset selection when modal closes
@@ -31,9 +64,15 @@ const MergeOrderModal: React.FC<MergeOrderModalProps> = ({ isOpen, onClose, onMe
             setLoading(true);
             setError(null);
             try {
-                const response = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/orders?filters[orderStatus][$eq]=served&populate=*`, {
-                    cache: 'no-store',
-                });
+                const { start, end } = getBusinessDayDateRange();
+
+                // Directly fetch served orders for the current "business day" using Strapi filters
+                const response = await fetch(
+                    `${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/orders?filters[orderStatus][$eq]=served&filters[createdAt][$gte]=${start}&filters[createdAt][$lt]=${end}`,
+                    {
+                        cache: 'no-store',
+                    }
+                );
 
                 if (!response.ok) {
                     throw new Error(`Error fetching served orders: ${response.status} ${response.statusText}`);
@@ -41,23 +80,10 @@ const MergeOrderModal: React.FC<MergeOrderModalProps> = ({ isOpen, onClose, onMe
 
                 const responseData = await response.json();
                 if (responseData.data && Array.isArray(responseData.data)) {
-                    // Get today's date, normalized to midnight in the local timezone (Sihanoukville, Cambodia is UTC+7)
-                    // We'll normalize both the current date and the order's created date to compare only the day.
-                    const today = new Date();
-                    // Set hours, minutes, seconds, milliseconds to 0 for consistent day comparison
-                    today.setHours(0, 0, 0, 0);
-
+                    // Filter out the current order being viewed on the client side
+                    // (The date filtering is now handled by the Strapi query)
                     const filteredOrders = responseData.data
-                        .filter((orderItem: any) => {
-                            // Filter out the current order being viewed
-                            if (orderItem.id === currentOrderId) {
-                                return false;
-                            }
-                            // Filter for orders created today
-                            const orderCreatedAt = new Date(orderItem.createdAt);
-                            orderCreatedAt.setHours(0, 0, 0, 0); // Normalize order created date to midnight
-                            return orderCreatedAt.getTime() === today.getTime();
-                        })
+                        .filter((orderItem: any) => orderItem.id !== currentOrderId)
                         .map((orderItem: any) => ({
                             id: orderItem.id,
                             documentId: orderItem.documentId || orderItem.id.toString(),
@@ -65,17 +91,22 @@ const MergeOrderModal: React.FC<MergeOrderModalProps> = ({ isOpen, onClose, onMe
                             tableName: orderItem.tableName,
                             customerName: orderItem.customerName,
                             createdAt: orderItem.createdAt,
+                            paymentDaytime: orderItem.paymentDaytime,
+                            // order_rows will be fetched separately for each order, as per original logic
+                            order_rows: [] // Initialize as empty, they will be populated below
                         }));
 
-                    // Fetch order rows for each filtered order
-                    const ordersWithRows = await Promise.all(filteredOrders.map(async (orderItem: Order) => {
+                    // Fetch order rows and product details for each filtered order,
+                    // preserving your existing logic for this part.
+                    const ordersWithAllDetails = await Promise.all(filteredOrders.map(async (orderItem: Order) => {
                         const orderRowsResponse = await fetch(
                             `${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/order-rows?filters[order_doc_id][$eq]=${orderItem.documentId}&populate=*`,
                             { cache: 'no-store' }
                         );
 
                         if (!orderRowsResponse.ok) {
-                            throw new Error(`Error fetching order rows: ${orderRowsResponse.status} ${orderRowsResponse.statusText}`);
+                            console.warn(`Could not fetch order rows for order ${orderItem.documentId}. Error: ${orderRowsResponse.status} ${orderRowsResponse.statusText}`);
+                            return { ...orderItem, order_rows: [] }; // Return order with empty rows if fetch fails
                         }
 
                         const orderRowsResponseData = await orderRowsResponse.json();
@@ -106,7 +137,7 @@ const MergeOrderModal: React.FC<MergeOrderModalProps> = ({ isOpen, onClose, onMe
                                             }
                                         }
                                     } catch (err) {
-                                        console.error("Error fetching product:", err);
+                                        console.error(`Error fetching product ${rowAttributes.product_doc_id}:`, err);
                                     }
                                 }
 
@@ -134,7 +165,7 @@ const MergeOrderModal: React.FC<MergeOrderModalProps> = ({ isOpen, onClose, onMe
                         };
                     }));
 
-                    setServedOrders(ordersWithRows);
+                    setServedOrders(ordersWithAllDetails);
                 } else {
                     setServedOrders([]);
                 }
@@ -155,6 +186,7 @@ const MergeOrderModal: React.FC<MergeOrderModalProps> = ({ isOpen, onClose, onMe
         if (selectedOrderId) {
             const selectedOrder = servedOrders.find(order => order.id === selectedOrderId);
             if (selectedOrder) {
+                // Ensure documentId is always passed, falling back to id.toString()
                 onMerge(selectedOrder.order_rows, selectedOrder.id, selectedOrder.documentId || selectedOrder.id.toString());
                 onClose();
             }
@@ -165,7 +197,7 @@ const MergeOrderModal: React.FC<MergeOrderModalProps> = ({ isOpen, onClose, onMe
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-sm mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
                 <h2 className="text-2xl font-bold mb-8 text-primary text-center">Merge Order</h2>
                 {loading && <p className="text-center text-foreground">Loading served orders...</p>}
                 {error && <p className="text-center text-red-500">{error}</p>}
@@ -174,7 +206,7 @@ const MergeOrderModal: React.FC<MergeOrderModalProps> = ({ isOpen, onClose, onMe
                 )}
 
                 {!loading && !error && servedOrders.length > 0 && (
-                    <div className="mb-6 rounded-lg border-primary border-2 p-4 bg-card">
+                    <div className="mb-6 rounded-lg border-primary border-2 p-4 bg-card ps-6">
                         <Label className="block text-foreground text-bold text-lg mb-4">Select an order to merge</Label>
                         <RadioGroup
                             value={selectedOrderId ? selectedOrderId.toString() : ''}
@@ -184,10 +216,10 @@ const MergeOrderModal: React.FC<MergeOrderModalProps> = ({ isOpen, onClose, onMe
                             {servedOrders.map((order) => (
                                 <div key={order.id} className="flex items-center space-x-4 border-b border-gray-200 dark:border-gray-700 pb-4">
                                     <RadioGroupItem value={order.id.toString()} id={`order-${order.id}`} />
-                                    <Label htmlFor={`order-${order.id}`} className="grow">
+                                    <Label htmlFor={`order-${order.id}`} className="grow ps-4 cursor-pointer">
                                         <div className="flex flex-col w-full">
                                             <div className="flex justify-between text-primary text-lg font-semibold">
-                                                <p>Order #{order.id} - {order.customerName}</p>
+                                                <p>#{order.id} - {order.customerName}</p>
                                                 <p>Table: {order.tableName || 'N/A'}</p>
                                             </div>
                                             <div className="flex justify-between pt-2 text-foreground text-sm">

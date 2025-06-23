@@ -96,7 +96,6 @@ const OrderCard = ({ order, foodData }: OrderCardProps) => {
             </svg>
           </div>
         )}
-
         <p className="font-bold text-lg text-gray-900">Table: {order.tableName || 'N/A'}</p>
         <p className={customerNameClasses}>{order.customerName}</p>
         <p className="text-sm text-gray-600">Created: <span className={createdAtClasses}>{`${new Date(order.createdAt).getHours()}:${formatMinutes(new Date(order.createdAt).getMinutes())}`}</span></p>

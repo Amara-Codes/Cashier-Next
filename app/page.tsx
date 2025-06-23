@@ -23,76 +23,176 @@ import OrderCard from "@/components/OrderCard";
 export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
+  const [servedOrders, setServedOrders] = useState<Order[]>([]);
+  const [todayPaidOrders, setTodayPaidOrders] = useState<Order[]>([]);
+
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [userName, setUserName] = useState('');
-  // Changed foodData to foodDataMap to store data per orderDocumentId
   const [foodDataMap, setFoodDataMap] = useState<Record<string, FoodData>>({});
   const STRAPI_URL = process.env.NEXT_PUBLIC_STRAPI_URL;
 
-  const fetchOrders = useCallback(async () => {
+  // --- MODIFIED FUNCTION HERE ---
+  const getTodayDateRange = () => {
+    const now = new Date();
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0); // Start of the current calendar day
+
+    const nextDay = new Date(now);
+    nextDay.setDate(now.getDate() + 1); // Move to the next calendar day
+    const effectiveDayEnd = new Date(nextDay);
+    effectiveDayEnd.setHours(4, 0, 0, 0); // End at 4 AM of the next calendar day
+
+    // If current time is past 4 AM but before midnight, the "today" period has already passed its 4 AM mark.
+    // In this case, the start of the period should actually be 4 AM of the *current* day (yesterday's "end").
+    // And the end should be 4 AM of *tomorrow*.
+
+    // Let's refine this to be robust:
+    // If it's 3 PM on Monday, your "today" is Monday 00:00:00 to Tuesday 04:00:00
+    // If it's 2 AM on Tuesday, your "today" is Monday 00:00:00 to Tuesday 04:00:00
+    // If it's 5 AM on Tuesday, your "today" is Tuesday 00:00:00 to Wednesday 04:00:00
+
+    // This logic aims to determine the correct "business day" based on the current time.
+    let startOfBusinessDay = new Date(now);
+    let endOfBusinessDay = new Date(now);
+
+    if (now.getHours() < 4) {
+      // If it's before 4 AM, we are still in yesterday's business day.
+      // So, the start of the business day is the previous calendar day at 00:00:00
+      startOfBusinessDay.setDate(now.getDate() - 1);
+      startOfBusinessDay.setHours(0, 0, 0, 0);
+
+      // The end of the business day is today at 4 AM
+      endOfBusinessDay.setHours(4, 0, 0, 0);
+    } else {
+      // If it's 4 AM or later, it's a new business day.
+      // The start of the business day is today at 00:00:00
+      startOfBusinessDay.setHours(0, 0, 0, 0);
+
+      // The end of the business day is tomorrow at 4 AM
+      endOfBusinessDay.setDate(now.getDate() + 1);
+      endOfBusinessDay.setHours(4, 0, 0, 0);
+    }
+
+    return {
+      start: startOfBusinessDay.toISOString(),
+      end: endOfBusinessDay.toISOString()
+    };
+  };
+  // --- END OF MODIFIED FUNCTION ---
+
+  const fetchFilteredOrders = useCallback(async () => {
     const jwt = localStorage.getItem('jwt');
     setUserName(localStorage.getItem('username') ?? 'Unidentified User');
+
     if (!jwt) {
       setIsAuthenticated(false);
       setIsLoading(false);
       return;
     }
     setIsAuthenticated(true);
+
+    const { start, end } = getTodayDateRange();
+
     try {
-      const response = await fetch(`${STRAPI_URL}/api/orders/`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${jwt}`,
-        },
-        cache: 'no-store',
-      });
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          localStorage.removeItem('jwt');
-          setIsAuthenticated(false);
-          setFetchError("Session expired or unauthorized. Please log in again.");
-        } else {
-          const errorData = await response.json();
-          console.error(`Failed to fetch orders: ${response.status} ${response.statusText}`, errorData);
-          setFetchError(errorData.error?.message || `Error fetching orders: ${response.status}`);
+      const commonHeaders = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${jwt}`,
+      };
+
+      // 1. Fetch Pending Orders for the current "business day"
+      const pendingResponse = await fetch(
+        `${STRAPI_URL}/api/orders?filters[orderStatus][$eq]=pending&filters[createdAt][$gte]=${start}&filters[createdAt][$lt]=${end}&populate=order_rows`,
+        {
+          method: 'GET',
+          headers: commonHeaders,
+          cache: 'no-store',
         }
-        setOrders([]);
-      } else {
-        const {
-          data
-        } = await response.json();
-        const allOrders: Order[] = data.map((item: any) => ({
-          id: item.id,
-          documentId: item.documentId,
-          orderStatus: item.orderStatus,
-          tableName: item.tableName,
-          customerName: item.customerName,
-          createdAt: item.createdAt,
-          paymentDaytime: item.paymentDaytime,
-          order_rows: item.order_rows?.data ? item.order_rows.data.map((row: any) => ({
-            id: row.id,
-            documentId: row.documentId,
-            quantity: row.quantity,
-            subtotal: row.subtotal,
-            taxesSubtotal: row.taxesSubtotal,
-            orderRowStatus: row.orderRowStatus,
-            createdAt: row.createdAt,
-            category_doc_id: row.category_doc_id,
-            product_doc_id: row.product_doc_id,
-            order_doc_id: item.documentId, // Correctly assign order_doc_id from parent order
-          })) : [],
-        }));
+      );
 
+      // 2. Fetch Served Orders for the current "business day"
+      const servedResponse = await fetch(
+        `${STRAPI_URL}/api/orders?filters[orderStatus][$eq]=served&filters[createdAt][$gte]=${start}&filters[createdAt][$lt]=${end}&populate=order_rows`,
+        {
+          method: 'GET',
+          headers: commonHeaders,
+          cache: 'no-store',
+        }
+      );
 
-        setOrders(allOrders);
+      // 3. Fetch Paid Orders for the current "business day" (based on paymentDaytime)
+      const paidResponse = await fetch(
+        `${STRAPI_URL}/api/orders?filters[orderStatus][$eq]=paid&filters[paymentDaytime][$gte]=${start}&filters[paymentDaytime][$lt]=${end}&populate=order_rows`,
+        {
+          method: 'GET',
+          headers: commonHeaders,
+          cache: 'no-store',
+        }
+      );
+
+      const responses = [pendingResponse, servedResponse, paidResponse];
+      let anyError = false;
+
+      for (const response of responses) {
+        if (!response.ok) {
+          anyError = true;
+          if (response.status === 401 || response.status === 403) {
+            localStorage.removeItem('jwt');
+            setIsAuthenticated(false);
+            setFetchError("Session expired or unauthorized. Please log in again.");
+          } else {
+            const errorData = await response.json();
+            console.error(`Failed to fetch orders: ${response.status} ${response.statusText}`, errorData);
+            setFetchError(errorData.error?.message || `Error fetching orders: ${response.status}`);
+          }
+          if (!isAuthenticated) break;
+        }
+      }
+
+      if (!anyError && isAuthenticated) {
+        const [pendingData, servedData, paidData] = await Promise.all(
+          responses.map(res => res.ok ? res.json() : Promise.resolve({ data: [] }))
+        );
+
+        const processOrders = (items: any[]): Order[] => {
+          return items.map((item: any) => ({
+            id: item.id,
+            documentId: item.documentId,
+            orderStatus: item.orderStatus,
+            tableName: item.tableName,
+            customerName: item.customerName,
+            createdAt: item.createdAt,
+            paymentDaytime: item.paymentDaytime,
+            order_rows: item.order_rows?.data ? item.order_rows.data.map((row: any) => ({
+              id: row.id,
+              documentId: row.documentId,
+              quantity: row.quantity,
+              subtotal: row.subtotal,
+              taxesSubtotal: row.taxesSubtotal,
+              orderRowStatus: row.orderRowStatus,
+              createdAt: row.createdAt,
+              category_doc_id: row.category_doc_id,
+              product_doc_id: row.product_doc_id,
+              order_doc_id: item.documentId,
+            })) : [],
+          }));
+        };
+
+        setPendingOrders(processOrders(pendingData.data));
+        setServedOrders(processOrders(servedData.data));
+        setTodayPaidOrders(processOrders(paidData.data));
         setFetchError(null);
+      } else {
+        setPendingOrders([]);
+        setServedOrders([]);
+        setTodayPaidOrders([]);
       }
     } catch (error) {
       console.error("Error fetching orders:", error);
       setFetchError("Network error or server unavailable.");
-      setOrders([]);
+      setPendingOrders([]);
+      setServedOrders([]);
+      setTodayPaidOrders([]);
     } finally {
       if (isAuthenticated) {
         setIsLoading(false);
@@ -103,35 +203,29 @@ export default function HomePage() {
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
     const initialAndIntervalFetch = async () => {
-      if (orders.length === 0 && !fetchError) {
+      if (pendingOrders.length === 0 && servedOrders.length === 0 && todayPaidOrders.length === 0 && !fetchError) {
         setIsLoading(true);
       }
-      await fetchOrders();
+      await fetchFilteredOrders();
       setIsLoading(false);
     };
+
     initialAndIntervalFetch();
     intervalId = setInterval(() => {
-      console.log('Fetching orders...');
-      fetchOrders();
+      console.log('Fetching filtered orders...');
+      fetchFilteredOrders();
     }, 5000);
+
     return () => {
       if (intervalId) {
         clearInterval(intervalId);
       }
     };
-  }, [fetchOrders, fetchError, orders.length]);
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const isToday = (dateString: string): boolean => {
-    const date = new Date(dateString);
-    date.setHours(0, 0, 0, 0);
-    return date.getTime() === today.getTime();
-  };
+  }, [fetchFilteredOrders, fetchError, pendingOrders.length, servedOrders.length, todayPaidOrders.length]);
 
   async function getOrderData(orderDocId: string): Promise<Order | null> {
     try {
-      const orderResponse = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/orders/${orderDocId}?populate=*`, {
+      const orderResponse = await fetch(`${STRAPI_URL}/api/orders/${orderDocId}?populate=*`, {
         cache: 'no-store',
       });
 
@@ -159,7 +253,7 @@ export default function HomePage() {
       };
 
       const orderRowsResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/order-rows?filters[order_doc_id][$eq]=${actualOrderDocId}&populate=*`,
+        `${STRAPI_URL}/api/order-rows?filters[order_doc_id][$eq]=${actualOrderDocId}&populate=*`,
         { cache: 'no-store' }
       );
 
@@ -185,7 +279,7 @@ export default function HomePage() {
     let foodOrderData = []
     try {
       for (const e of orderRows) {
-        const catResponse = await fetch(`${process.env.NEXT_PUBLIC_STRAPI_URL || ''}/api/categories/${e.category_doc_id}?populate=*`, {
+        const catResponse = await fetch(`${STRAPI_URL}/api/categories/${e.category_doc_id}?populate=*`, {
           cache: 'no-store',
         });
 
@@ -207,38 +301,6 @@ export default function HomePage() {
     return foodOrderData;
   }
 
-  // Made useCallback to avoid unnecessary recreations and added foodDataMap as a dependency
-  const getOrderFoodInfo = useCallback((order: Order): void => {
-    // Do not refetch if data for this order.documentId is already present
-    if (order.documentId && foodDataMap[order.documentId]) {
-      return;
-    }
-
-    getOrderData(order.documentId!).then((orderData) => {
-      if (orderData) {
-        getFoodOrderData(orderData.order_rows).then((foodOrderData) => {
-          if (foodOrderData) {
-            const processed = ProcessFoodData(foodOrderData);
-            if (processed) {
-              // Update the foodDataMap for the specific order.documentId
-              setFoodDataMap(prevMap => ({
-                ...prevMap,
-                [order.documentId!]: processed
-              }));
-            } else {
-              // Optionally, remove or set to null if no food data is found
-              setFoodDataMap(prevMap => {
-                const newMap = { ...prevMap };
-                delete newMap[order.documentId!];
-                return newMap;
-              });
-            }
-          }
-        });
-      }
-    });
-  }, [foodDataMap]); // Added foodDataMap as a dependency
-
   const ProcessFoodData = (foodData: any): FoodData | null => {
     let foodDataInfo = { hasFoodToCook: false, allFoodIsCooked: false };
     if (foodData && foodData.length > 0) {
@@ -250,7 +312,6 @@ export default function HomePage() {
       }
 
       const foodItems = foodData.filter((item: any) => item.isFood === true);
-      // Potential correction: "allFoodIsCoocked" should likely be "allFoodIsCooked"
       if (foodItems.length > 0 && foodItems.every((item: any) => item.status === 'served')) {
         foodDataInfo.allFoodIsCooked = true;
       }
@@ -258,25 +319,40 @@ export default function HomePage() {
     }
     return null;
   }
-  // Apply the 'isToday' filter to served and pending orders
-  const servedOrders = orders.filter(order => order.orderStatus === 'served' && isToday(order.createdAt));
-  const pendingOrders = orders.filter(order => order.orderStatus === 'pending' && isToday(order.createdAt));
 
-  // Trigger for fetching food data for pending orders
+  const getOrderFoodInfo = useCallback((order: Order): void => {
+    if (order.documentId && foodDataMap[order.documentId]) {
+      return;
+    }
+
+    getOrderData(order.documentId!).then((orderData) => {
+      if (orderData) {
+        getFoodOrderData(orderData.order_rows).then((foodOrderData) => {
+          if (foodOrderData) {
+            const processed = ProcessFoodData(foodOrderData);
+            if (processed) {
+              setFoodDataMap(prevMap => ({
+                ...prevMap,
+                [order.documentId!]: processed
+              }));
+            } else {
+              setFoodDataMap(prevMap => {
+                const newMap = { ...prevMap };
+                delete newMap[order.documentId!];
+                return newMap;
+              });
+            }
+          }
+        });
+      }
+    });
+  }, [foodDataMap, STRAPI_URL]);
+
   useEffect(() => {
     pendingOrders.forEach(order => {
       getOrderFoodInfo(order);
     });
-  }, [pendingOrders, getOrderFoodInfo]); // Dependency on pendingOrders and getOrderFoodInfo
-
-  const todayPaidOrders = orders.filter(order => {
-    if (order.orderStatus === 'paid' && order.paymentDaytime) {
-      const paymentDate = new Date(order.paymentDaytime);
-      paymentDate.setHours(0, 0, 0, 0); // Normalize payment date to midnight
-      return paymentDate.getTime() === today.getTime();
-    }
-    return false;
-  });
+  }, [pendingOrders, getOrderFoodInfo]);
 
   const formatMinutes = (minutes: number): string => {
     return minutes < 10 ? `0${minutes}` : minutes.toString();
@@ -337,7 +413,6 @@ export default function HomePage() {
         {pendingOrders.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
             {pendingOrders.map((order) => (
-              // Pass the specific foodData for this order from the map
               <OrderCard key={order.documentId} order={order} foodData={foodDataMap[order.documentId!]} />
             ))}
           </div>
@@ -354,7 +429,6 @@ export default function HomePage() {
         {servedOrders.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
             {servedOrders.map((order) => (
-              // Use OrderCard for served orders as well, passing undefined for foodData if not needed
               <OrderCard key={order.documentId} order={order} foodData={undefined} />
             ))}
           </div>
@@ -370,7 +444,6 @@ export default function HomePage() {
       {todayPaidOrders.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 w-full">
           {todayPaidOrders.map((order) => (
-            // Use OrderCard for paid orders, passing undefined for foodData
             <OrderCard key={order.documentId} order={order} foodData={undefined} />
           ))}
         </div>
