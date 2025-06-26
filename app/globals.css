@@ -137,3 +137,33 @@
     @apply bg-background text-foreground;
   }
 }
+
+
+html {
+    overflow: scroll;
+    overflow-x: hidden;
+}
+::-webkit-scrollbar {
+    width: 0;  /* Remove scrollbar space */
+    background: transparent;  /* Optional: just make scrollbar invisible */
+}
+/* Optional: show position indicator in red */
+::-webkit-scrollbar-thumb {
+    background: #000000;
+}
+
+
+
+
+/* Print-specific styles */
+@media print {
+
+  @page {
+    size: A5; /* Permette al browser di determinare la dimensione della pagina */
+    margin: 0mm; /* Imposta tutti i margini a zero */
+  }
+
+ .print-hided {
+  display: none !important;
+ }
+}

@@ -109,7 +109,7 @@ export default function ProductSelectionModal({
           <div className="w-full h-1/2 md:h-auto md:w-1/3 border-b md:border-b-0 md:border-r border-border pb-4 md:pb-0 md:pr-4 overflow-y-auto">
             <h3 className="lg:text-lg font-bold mb-3 text-primary">Categories</h3>
             {categories.length > 0 ? (
-              <ul className="space-y-2 border border-primary rounded-md">
+              <ul className="space-y-2 border border-primary rounded-md p-2 scrollbar-hide">
                 {categories.map((category) => (
                   <li key={category.id}>
                     <Button
@@ -135,7 +135,7 @@ export default function ProductSelectionModal({
             </h3>
             {selectedCategoryDocId ? (
               categoryProducts.length > 0 ? (
-                <ul className="space-y-2 flex-1 overflow-y-auto border border-primary rounded-md">
+                <ul className="space-y-2 flex-1 overflow-y-auto border border-primary rounded-md p-2 scrollbar-hide">
                   {categoryProducts.map((product) => (
                     <li key={product.id}>
                       <Button

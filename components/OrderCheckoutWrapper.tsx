@@ -447,7 +447,7 @@ export default function OrderCheckoutWrapper({ initialOrder, onOrderMerged }: Or
                 </div>
                 <div className="flex space-x-4">
                     <Button
-                        className='bg-blue-600 text-white px-4'
+                        className='bg-blue-500 hover:bg-blue-800 text-white px-4'
                         size="lg"
                         onClick={() => setIsMergeModalOpen(true)}
                         disabled={order.orderStatus === 'paid' || order.orderStatus === 'merged'} // Disable if already paid/merged
@@ -455,7 +455,7 @@ export default function OrderCheckoutWrapper({ initialOrder, onOrderMerged }: Or
                         Merge Order
                     </Button>
                     <Button
-                        className='bg-emerald-500 text-white px-4'
+                        className='bg-emerald-500 hover:bg-emerald-800 text-white px-4'
                         size="lg"
                         onClick={() => setIsPaymentModalOpen(true)}
                         disabled={activeOrderRowsCount === 0 || order.orderStatus === 'paid'}

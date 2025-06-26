@@ -77,7 +77,7 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
 
             console.log("New calculated order status:", newCalculatedOrderStatus);
 
-            if (newCalculatedOrderStatus && newCalculatedOrderStatus !== order.orderStatus ) {
+            if (newCalculatedOrderStatus && newCalculatedOrderStatus !== order.orderStatus) {
                 updateOrderStatus(newCalculatedOrderStatus)
             }
         }
@@ -179,6 +179,17 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
         orderStatus: order.orderStatus || 'N/A'
     };
 
+    const handlePrintOrder = () => {
+        // Implement your printing logic here.
+        // This could involve:
+        // 1. Opening a new window with a print-friendly view of the order.
+        // 2. Using a dedicated printing library (e.g., react-to-print).
+        // 3. Triggering the browser's print dialog (window.print()).
+        // For a simple print, window.print() is often the easiest.
+        console.log("Printing order:", order.documentId);
+        window.print(); // Triggers the browser's print dialog
+    };
+
     // Filter out cancelled rows before calculating totals
     const activeOrderRows = order.order_rows.filter(row => row.orderRowStatus !== 'cancelled');
 
@@ -192,23 +203,23 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
     return (
 
         <main className="flex min-h-screen flex-col items-center px-4 sm:px-8 md:px-24 py-8 bg-background text-foreground">
-            <div className='flex items-center justify-between w-full max-w-6xl mt-8 mb-6'>
+            <div className='flex items-center justify-between w-full max-w-6xl mt-8 mb-6 print-hided'>
                 <div className="logo-container">
                     <Link href="/" passHref>
                         <Image src="/logo.png" alt="Logo" width={80} height={80} className="logo" priority />
                     </Link>
                     <p className="text-primary font-bold text-center capitalize">{userName}</p>
                 </div>
-                {order.orderStatus !== 'paid' && (
+                {/* Conditionally render buttons based on order status */}
+                {order.orderStatus !== 'paid' ? ( // If NOT paid, show checkout and add product
                     <div className='flex gap-x-2'>
-
                         {isCheckoutDisabled ? (
                             <Button className='bg-emerald-500 text-white px-2' size="lg" disabled>
                                 Checkout
                             </Button>
                         ) : (
                             <Link href={`/checkout/${initialOrder.documentId}`} passHref>
-                                <Button className='bg-emerald-500 text-white px-2' size="lg">
+                                <Button className='bg-emerald-500 hover:bg-emerald-800 text-white px-2' size="lg">
                                     Checkout
                                 </Button>
                             </Link>
@@ -217,7 +228,15 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
                             Add Product to Order
                         </Button>
                     </div>
-
+                ) : ( // If PAID, show print button
+                    <div className='flex gap-x-2'>
+                        <Button onClick={handlePrintOrder} className="bg-blue-500 hover:bg-blue-700 text-white px-2" size="lg">
+                            Print Order
+                        </Button>
+                        {/* You might still want to allow adding products to a paid order for "re-orders" or additions,
+                            but typically a "paid" order implies finalization. If you want to keep "Add Product" visible
+                            even when paid, move it outside this conditional block. For now, it's only shown if NOT paid. */}
+                    </div>
                 )}
 
             </div>

@@ -13,16 +13,30 @@ const formatMinutes = (minutes: number): string => {
 
 const OrderCard = ({ order, foodData }: OrderCardProps) => {
   const hasFoodToCook = foodData?.hasFoodToCook;
-  const allFoodIsCooked =  foodData?.allFoodIsCooked; // Attenzione: "Coocked" dovrebbe essere "Cooked"
+  const allFoodIsCooked = foodData?.allFoodIsCooked;
+  const isPaid = order.orderStatus === 'paid'; // This is already correctly defined
 
-  // Determina le classi CSS in base allo stato dell'ordine
-  const cardClasses = `block p-4 border-2 rounded-lg shadow-sm hover:shadow-lg transition-shadow cursor-pointer flex flex-col justify-end ${
-    hasFoodToCook
-      ? 'border-yellow-400 animate-vibrate bg-yellow-100'
-      : allFoodIsCooked
-      ? 'border-yellow-400 animate-vibrate bg-green-100'
-      : 'border-gray-300 animate-vibrate bg-white' // Default se nessuna delle condizioni è vera
-  }`;
+  // Determine CSS classes based on order status
+  // We'll build the base classes and then conditionally add 'animate-vibrate'
+  let cardBaseClasses = `block p-4 border-2 rounded-lg shadow-sm hover:shadow-lg transition-shadow cursor-pointer flex flex-col justify-end`;
+  let conditionalClasses = '';
+
+  if (hasFoodToCook) {
+    conditionalClasses = 'border-yellow-400 bg-yellow-100';
+  } else if (allFoodIsCooked) {
+    conditionalClasses = 'border-yellow-400 bg-green-100'; // Note: The previous logic had a typo here, it was `isPaid`
+  } else if (isPaid) { // Explicitly check for paid to ensure different styling
+    conditionalClasses = 'border-gray-300 bg-white'; // No vibration for paid orders
+  } else {
+    // Default if none of the above conditions are met (e.g., pending, but not food-related)
+    conditionalClasses = 'border-gray-300 bg-white';
+  }
+
+  // Conditionally add animate-vibrate if not paid
+  const vibrateClass = isPaid ? '' : 'animate-vibrate';
+
+  const cardClasses = `${cardBaseClasses} ${conditionalClasses} ${vibrateClass}`;
+
 
   const customerNameClasses = `font-bold text-lg mb-4 ${
     hasFoodToCook ? 'text-orange-400' : 'text-green-500'
@@ -38,7 +52,7 @@ const OrderCard = ({ order, foodData }: OrderCardProps) => {
         {hasFoodToCook && (
           <div className="flex justify-end">
             <audio src="/notification.mp3" autoPlay />
-            {/* Inserisci qui l'SVG per 'hasFoodToCook' */}
+            {/* SVG for 'hasFoodToCook' */}
             <svg fill="#000000" height="40" width="40" version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 513.164 513.164" xmlSpace="preserve">
               <g><g><circle cx="221.673" cy="175.709" r="11.636" /></g></g>
@@ -80,7 +94,7 @@ const OrderCard = ({ order, foodData }: OrderCardProps) => {
         {allFoodIsCooked && (
           <div className="flex justify-end">
             <audio src="/ready.mp3" autoPlay />
-            {/* Inserisci qui l'SVG per 'allFoodIsCoocked' */}
+            {/* SVG for 'allFoodIsCoocked' */}
             <svg fill="#000000" height="40" width="40" version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 512 512" xmlSpace="preserve">
               <g><g><path d="M503.83,388.085H8.17c-4.513,0-8.17,3.657-8.17,8.17s3.657,8.17,8.17,8.17h25.333c3.795,18.624,20.3,32.681,40.029,32.681
