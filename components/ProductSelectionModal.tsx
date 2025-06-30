@@ -168,7 +168,7 @@ export default function ProductSelectionModal({
           <div className="mt-6 pt-4 border-t border-border flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0 md:space-x-4">
             
             {/* Modifiche per mobile qui */}
-            <Button onClick={handleConfirmAddProduct} size="lg" className="w-full md:w-auto p-2 text-black">
+            <Button onClick={handleConfirmAddProduct} size="lg" className="w-full p-2 text-black">
               Add {selectedQuantity} x {selectedProductInModal.name} to Order
             </Button>
           </div>
