@@ -2,7 +2,6 @@
 import React from 'react';
 import OrderRowStatusSwitcher from '@/components/OrderRowStatusSwitcher';
 import { useEffect, useState } from 'react';
-import Image from 'next/image';
 
 import { Category, OrderRow  } from '@/types';
 
@@ -93,12 +92,11 @@ const OrderRowDisplay: React.FC<OrderItemProps> = ({ row, showPaidSwitcher = fal
             <div className='w-1/2'>
                 <div>
                     <span className="font-medium">
-
-                        {row.quantity} x {row.product?.name || 'Prodotto sconosciuto'}
+                        {row.quantity} x {row.product?.name || 'Unknown Product'}
                     </span>
                     {row.product?.price && (
                         <span className="text-sm text-muted-foreground block">
-                            (@ €{row.product.price.toFixed(2)} each)
+                            (@ ${row.product.price.toFixed(2)} each)
                         </span>
                     )}
 
@@ -124,17 +122,12 @@ const OrderRowDisplay: React.FC<OrderItemProps> = ({ row, showPaidSwitcher = fal
 
 
             <div className="text-right">
-                <span className="font-semibold block">€{row.subtotal.toFixed(2)}</span>
-                {row.taxesSubtotal > 0 && (
-                    <span className="text-xs text-muted-foreground block">
-                        (Taxes: €{row.taxesSubtotal.toFixed(2)})
-                    </span>
-                )}
+                <span className="font-semibold block">${row.subtotal.toFixed(2)}</span>
                 <span className="text-xs text-muted-foreground block">
-                    Added: {new Date(row.createdAt).toLocaleString('it-IT')}
+                    Added: {new Date(row.createdAt).toLocaleTimeString('it-IT')}
                 </span>
                 <span className="text-xs text-muted-foreground block">
-                    Updated: {new Date(row.updatedAt).toLocaleString('it-IT')}
+                    Updated: {new Date(row.updatedAt).toLocaleTimeString('it-IT')}
                 </span>
             </div>
         </li>

@@ -269,8 +269,8 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
                     </span></p>
 
 
-                <p><strong>Table Name / Table Number:</strong> {order.tableName || 'N/D'}</p>
-                <p><strong>Created At:</strong> {new Date(order.createdAt).toLocaleString('it-IT')}</p>
+                <p><strong>Table:</strong> {order.tableName || 'N/D'}</p>
+                <p><strong>Created At:</strong> {new Date(order.createdAt).toLocaleTimeString('it-IT')}</p>
                 <h3 className="text-xl font-semibold mt-6 mb-2">Products:</h3>
                 {order.order_rows && order.order_rows.length > 0 ? (
                     <ul className="divide-y divide-border">
@@ -290,15 +290,15 @@ export default function OrderDisplayWrapper({ initialOrder, categories }: OrderD
                     <div className="mt-8 pt-4 border-t border-border">
                         <div className="flex justify-between items-center text-lg font-semibold mb-2">
                             <span>Subtotal (excluding taxes):</span>
-                            <span>€{totalNoTaxes.toFixed(2)}</span>
+                            <span>${totalNoTaxes.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between items-center text-lg font-semibold mb-2">
                             <span>Total Taxes:</span>
-                            <span>€{totalTaxesSummedFromRows.toFixed(2)}</span>
+                            <span>${totalTaxesSummedFromRows.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between items-center text-xl font-bold text-primary">
                             <span>Grand Total:</span>
-                            <span>€{grandTotal.toFixed(2)}</span>
+                            <span>${grandTotal.toFixed(2)}</span>
                         </div>
                     </div>
                 )}

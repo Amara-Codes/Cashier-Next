@@ -90,10 +90,10 @@ export default function ProductSelectionModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+    <div className="absolute top-0 bottom-0 right-0 left-0 flex items-center justify-center bg-black">
       {/* Modifiche per mobile qui */}
-      <div className="bg-card p-4 rounded-lg shadow-xl w-[95%] max-w-lg h-[95vh] flex flex-col text-foreground
-                      md:p-6 md:max-w-3xl md:h-[95vh]">
+      <div className="bg-card p-4 lg:rounded-lg shadow-xl w-full max-w-lg h-full flex flex-col text-foreground
+                      md:p-6 md:max-w-3xl">
         <div className="flex justify-between items-center mt-4 mb-8">
           {/* Modifiche per mobile qui */}
           <h2 className="text-xl md:text-2xl font-semibold text-primary">Order: {createdOrder?.id} - {createdOrder?.customerName}</h2>
@@ -166,18 +166,7 @@ export default function ProductSelectionModal({
         {/* Modal Footer: Quantity and Add Button */}
         {selectedProductInModal?.name && ( // Check for product name (implies product is selected)
           <div className="mt-6 pt-4 border-t border-border flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0 md:space-x-4">
-            <div className='flex items-center space-x-2'>
-              <label htmlFor="quantity" className="text-sm font-medium text-muted-foreground">Quantity:</label>
-              <input
-                type="number"
-                id="quantity"
-                name="quantity"
-                min="1"
-                value={selectedQuantity}
-                onChange={(e) => setSelectedQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-20 p-2 border border-input rounded-md text-sm bg-transparent focus:ring-primary focus:border-primary text-end md:text-start"
-              />
-            </div>
+            
             {/* Modifiche per mobile qui */}
             <Button onClick={handleConfirmAddProduct} size="lg" className="w-full md:w-auto p-2 text-black">
               Add {selectedQuantity} x {selectedProductInModal.name} to Order

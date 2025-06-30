@@ -492,8 +492,8 @@ export default function OrderCheckoutWrapper({ initialOrder, onOrderMerged }: Or
                         {order.orderStatus || 'N/A'}
                     </span></p>
 
-                <p><strong>Table Name / Table Number:</strong> {order.tableName || 'N/A'}</p>
-                <p><strong>Created At:</strong> {new Date(order.createdAt).toLocaleString('en-US')}</p> {/* Changed to en-US locale */}
+                <p><strong>Table:</strong> {order.tableName || 'N/A'}</p>
+                <p><strong>Created At:</strong> {new Date(order.createdAt).toLocaleTimeString('en-US')}</p> {/* Changed to en-US locale */}
 
                 {order.mergedWithOderDocId?.length && (
                     <p className="text-purple-600 font-semibold mt-2">
@@ -536,7 +536,7 @@ export default function OrderCheckoutWrapper({ initialOrder, onOrderMerged }: Or
                                 className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
                             />
                             <label htmlFor="khmerCustomer" className="text-lg font-medium text-foreground">
-                                Khmer Customer (Beer: $3 &rarr; $1.75, $5 &rarr; $3)
+                                Khmer Customer (Beer: -40%)
                             </label>
                         </div>
 
@@ -564,7 +564,7 @@ export default function OrderCheckoutWrapper({ initialOrder, onOrderMerged }: Or
                                 className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
                             />
                             <label htmlFor="fWBDiscount" className="text-lg font-medium text-foreground">
-                                FWB Discount (20% off all beers)
+                                FWB Discount (Beer: 20% off)
                             </label>
                         </div >
 
@@ -578,7 +578,7 @@ export default function OrderCheckoutWrapper({ initialOrder, onOrderMerged }: Or
                                 className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
                             />
                             <label htmlFor="kandalVillageFriend" className="text-lg font-medium text-foreground">
-                                Kandal Village Friend (15% off all items)
+                                Kandal Village Friend (All Items: 15% off)
                             </label>
                         </div >
 
