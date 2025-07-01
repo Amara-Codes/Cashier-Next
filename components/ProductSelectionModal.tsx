@@ -53,7 +53,7 @@ export default function ProductSelectionModal({
   useEffect(() => {
     // Reset state when modal opens or categories change
     if (isOpen) {
-      window.scrollTo
+      window.scrollTo(0, 0); // Scroll to top when modal opens
       setSelectedCategoryDocId(null);
       setCategoryProducts([]);
       setSelectedProductInModal(null);
