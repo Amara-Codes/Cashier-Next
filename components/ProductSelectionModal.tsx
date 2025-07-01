@@ -53,6 +53,7 @@ export default function ProductSelectionModal({
   useEffect(() => {
     // Reset state when modal opens or categories change
     if (isOpen) {
+      window.scrollTo
       setSelectedCategoryDocId(null);
       setCategoryProducts([]);
       setSelectedProductInModal(null);
